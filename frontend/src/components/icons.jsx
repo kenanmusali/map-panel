@@ -16,5 +16,6 @@ export {
   GripVertical,
   Loader2,
   CheckCircle2,
-  AlertCircle
+  AlertCircle,
+  Archive
 } from 'lucide-react';

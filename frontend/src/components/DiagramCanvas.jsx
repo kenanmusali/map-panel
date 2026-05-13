@@ -1,9 +1,15 @@
-import { useRef, useState } from 'react';
+// DiagramCanvas.jsx
+import { useRef, useState, useMemo } from 'react';
 
-/**
- * Renders the diagram: lane rails on the left, lane separators, SVG edges, and nodes.
- * In edit mode, nodes can be dragged. Snap to 10px grid.
- */
+const SNAP_SIZE = 10;
+const RAIL_W = 56;
+const PAD_RIGHT = 80;
+const PAD_BOTTOM = 40;
+const MIN_W = 700;
+const MIN_H = 300;
+const CORNER_R = 10;          // path corner radius
+const DRAG_THRESHOLD = 3;     // px before a mousedown counts as a drag
+
 export default function DiagramCanvas({
   process,
   selectedNodeId,
@@ -11,20 +17,40 @@ export default function DiagramCanvas({
   editMode,
   onNodeClick,
   onLaneClick,
-  onNodeMove
+  onNodeMove,
+  onNodeMoveEnd
 }) {
   const canvasRef = useRef(null);
-  const [drag, setDrag] = useState(null); // { nodeId, startX, startY, origX, origY }
+  const [drag, setDrag] = useState(null);
 
+  // ---- Canvas auto-fit to content ----
+  const { canvasW, canvasH } = useMemo(() => {
+    const contentRight = process.nodes.length
+      ? Math.max(...process.nodes.map(n => (n.x || 0) + (n.w || 0)))
+      : RAIL_W + 200;
+
+    const contentBottom = process.lanes.length
+      ? Math.max(...process.lanes.map(l => (l.y || 0) + (l.h || 0)))
+      : 200;
+
+    return {
+      canvasW: Math.max(MIN_W, contentRight + PAD_RIGHT),
+      canvasH: Math.max(MIN_H, contentBottom + PAD_BOTTOM)
+    };
+  }, [process.nodes, process.lanes]);
+
+  // ---- Drag handlers ----
   function onMouseDownNode(e, node) {
     if (!editMode) return;
     e.preventDefault();
+    e.stopPropagation();
     setDrag({
       nodeId: node.id,
       startX: e.clientX,
       startY: e.clientY,
       origX: node.x,
-      origY: node.y
+      origY: node.y,
+      moved: false
     });
   }
 
@@ -32,16 +58,23 @@ export default function DiagramCanvas({
     if (!drag) return;
     const dx = e.clientX - drag.startX;
     const dy = e.clientY - drag.startY;
-    let nx = drag.origX + dx;
-    let ny = drag.origY + dy;
-    // snap to 10px grid
-    nx = Math.max(0, Math.round(nx / 10) * 10);
-    ny = Math.max(0, Math.round(ny / 10) * 10);
+
+    // Ignore tiny movements so clicks still count as clicks
+    if (!drag.moved && Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+
+    let nx = Math.round((drag.origX + dx) / SNAP_SIZE) * SNAP_SIZE;
+    let ny = Math.round((drag.origY + dy) / SNAP_SIZE) * SNAP_SIZE;
+    nx = Math.max(RAIL_W + 4, nx);
+    ny = Math.max(4, ny);
+
+    if (!drag.moved) setDrag(prev => ({ ...prev, moved: true }));
     onNodeMove(drag.nodeId, nx, ny);
   }
 
-  function onMouseUp() {
-    if (drag) setDrag(null);
+  function endDrag() {
+    if (!drag) return;
+    if (drag.moved && onNodeMoveEnd) onNodeMoveEnd(drag.nodeId);
+    setDrag(null);
   }
 
   const modalOpen = modalNodeId !== null && modalNodeId !== undefined;
@@ -50,22 +83,22 @@ export default function DiagramCanvas({
     <div
       ref={canvasRef}
       className="diagram-canvas"
-      style={{ width: process.width, height: process.height }}
+      style={{ width: canvasW, height: canvasH }}
       onMouseMove={onMouseMove}
-      onMouseUp={onMouseUp}
-      onMouseLeave={onMouseUp}
+      onMouseUp={endDrag}
+      onMouseLeave={endDrag}
     >
       {/* Lane rails (left vertical labels) */}
       {process.lanes.map((lane, idx) => (
         <div
           key={lane.id}
-          className={`lane-rail ${selectedNodeId === null && (process.editLaneIndex === idx) ? 'selected' : ''}`}
-          style={{ top: lane.y, height: lane.h }}
+          className="lane-rail"
+          style={{ top: lane.y, height: lane.h, width: RAIL_W }}
           onClick={(e) => { e.stopPropagation(); onLaneClick(idx); }}
         >
           <div className="lane-label">
-            {lane.label.split('\n').map((line, i) => (
-              <span key={i}>{line}{i < lane.label.split('\n').length - 1 && <br />}</span>
+            {lane.label.split('\n').map((line, i, arr) => (
+              <span key={i}>{line}{i < arr.length - 1 && <br />}</span>
             ))}
           </div>
         </div>
@@ -76,17 +109,20 @@ export default function DiagramCanvas({
         <div
           key={'row-' + lane.id}
           className="lane-row"
-          style={{ top: lane.y, height: lane.h }}
+          style={{ top: lane.y, height: lane.h, left: RAIL_W }}
         />
       ))}
 
       {/* SVG edges */}
-      <Edges process={process} />
+      <Edges process={process} width={canvasW} height={canvasH} />
 
       {/* Nodes */}
       {process.nodes.map((node) => {
-        const isSelected = String(modalNodeId) === String(node.id) || String(selectedNodeId) === String(node.id);
-        const dimmed = modalOpen && String(modalNodeId) !== String(node.id);
+        const isSelected =
+          String(modalNodeId) === String(node.id) ||
+          String(selectedNodeId) === String(node.id);
+        const dimmed = modalOpen && !isSelected;
+
         const cls = [
           'node',
           node.type,
@@ -100,35 +136,17 @@ export default function DiagramCanvas({
           <div
             key={node.id}
             className={cls}
-            style={{
-              left: node.x,
-              top: node.y,
-              width: node.w,
-              minHeight: node.h
-            }}
+            style={{ left: node.x, top: node.y, width: node.w, minHeight: node.h }}
             onMouseDown={(e) => onMouseDownNode(e, node)}
             onClick={(e) => {
               e.stopPropagation();
-              if (drag) return;
-              onNodeClick(node.id);
+              if (drag?.moved) return; // ignore click after drag
+              const rect = e.currentTarget.getBoundingClientRect();
+              onNodeClick(node.id, rect);
             }}
           >
             <div className="num">{node.id}</div>
             <div className="text">{node.text}</div>
-            <div style={{fontSize:'10px',opacity:0.7,marginTop:'6px'}}>
-              {node.diagramType || 'process'}
-            </div>
-            {node.popup && (
-              <div title={node.popup} style={{
-                marginTop:'6px',
-                fontSize:'11px',
-                background:'#ffffff22',
-                padding:'4px',
-                borderRadius:'6px'
-              }}>
-                popup
-              </div>
-            )}
           </div>
         );
       })}
@@ -137,17 +155,21 @@ export default function DiagramCanvas({
 }
 
 /* ====== SVG EDGES ====== */
-
-function Edges({ process }) {
+function Edges({ process, width, height }) {
   const nodeMap = Object.fromEntries(process.nodes.map(n => [String(n.id), n]));
 
   return (
-    <svg className="edges" width={process.width} height={process.height}>
+    <svg
+      className="edges"
+      width={width}
+      height={height}
+      style={{ pointerEvents: 'none', position: 'absolute', top: 0, left: 0, overflow: 'visible' }}
+    >
       <defs>
-        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
           <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--primary)" />
         </marker>
-        <marker id="arrow-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+        <marker id="arrow-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
           <path d="M 0 0 L 10 5 L 0 10 z" fill="#7ba0b3" />
         </marker>
       </defs>
@@ -163,6 +185,7 @@ function Edges({ process }) {
             stroke={e.dashed ? '#7ba0b3' : 'var(--primary)'}
             strokeWidth="2"
             fill="none"
+            strokeLinecap="round"
             strokeDasharray={e.dashed ? '5 5' : null}
             markerEnd={`url(#arrow${e.dashed ? '-d' : ''})`}
           />
@@ -171,6 +194,8 @@ function Edges({ process }) {
     </svg>
   );
 }
+
+/* ====== PATH ROUTING ====== */
 
 function anchor(node, side) {
   const { x, y, w, h } = node;
@@ -183,21 +208,31 @@ function anchor(node, side) {
   }
 }
 
-function computePath(from, to, sSide, eSide, via) {
+/**
+ * Build a list of waypoints for an orthogonal path between two nodes.
+ * Supports optional `via` waypoints (list of {x,y} points).
+ */
+function pathPoints(from, to, sSide, eSide, via) {
   const s = anchor(from, sSide);
   const e = anchor(to, eSide);
+
+  // Via-waypoint routing — alternate axes around each via
   if (via && via.length > 0) {
-    let d = `M ${s.x} ${s.y}`;
+    const pts = [s];
     let prev = s;
-    via.forEach(pt => {
-      d += ` L ${pt.x} ${prev.y} L ${pt.x} ${pt.y}`;
-      prev = pt;
-    });
-    d += ` L ${e.x} ${prev.y} L ${e.x} ${e.y}`;
-    return d;
+    for (const v of via) {
+      pts.push({ x: v.x, y: prev.y });
+      pts.push({ x: v.x, y: v.y });
+      prev = v;
+    }
+    pts.push({ x: e.x, y: prev.y });
+    pts.push(e);
+    return dedupe(pts);
   }
-  if (Math.abs(s.x - e.x) < 1) return `M ${s.x} ${s.y} L ${e.x} ${e.y}`;
-  if (Math.abs(s.y - e.y) < 1) return `M ${s.x} ${s.y} L ${e.x} ${e.y}`;
+
+  // Straight line if already aligned
+  if (Math.abs(s.x - e.x) < 1 || Math.abs(s.y - e.y) < 1) return [s, e];
+
   const sH = sSide === 'left' || sSide === 'right';
   const eH = eSide === 'left' || eSide === 'right';
   const sV = sSide === 'top' || sSide === 'bottom';
@@ -205,13 +240,72 @@ function computePath(from, to, sSide, eSide, via) {
 
   if (sV && eV) {
     const midY = (s.y + e.y) / 2;
-    return `M ${s.x} ${s.y} L ${s.x} ${midY} L ${e.x} ${midY} L ${e.x} ${e.y}`;
+    return [s, { x: s.x, y: midY }, { x: e.x, y: midY }, e];
   }
   if (sH && eH) {
     const midX = (s.x + e.x) / 2;
-    return `M ${s.x} ${s.y} L ${midX} ${s.y} L ${midX} ${e.y} L ${e.x} ${e.y}`;
+    return [s, { x: midX, y: s.y }, { x: midX, y: e.y }, e];
   }
-  if (sV && eH) return `M ${s.x} ${s.y} L ${s.x} ${e.y} L ${e.x} ${e.y}`;
-  if (sH && eV) return `M ${s.x} ${s.y} L ${e.x} ${s.y} L ${e.x} ${e.y}`;
-  return `M ${s.x} ${s.y} L ${e.x} ${e.y}`;
+  if (sV && eH) return [s, { x: s.x, y: e.y }, e];
+  if (sH && eV) return [s, { x: e.x, y: s.y }, e];
+
+  return [s, e];
+}
+
+function dedupe(pts) {
+  const r = [];
+  for (const p of pts) {
+    const last = r[r.length - 1];
+    if (!last || Math.abs(last.x - p.x) > 0.5 || Math.abs(last.y - p.y) > 0.5) r.push(p);
+  }
+  return r;
+}
+
+/**
+ * Convert a list of points into an SVG path string with rounded corners (radius r).
+ * Each interior point becomes a quadratic Bézier curve.
+ */
+function roundedPath(points, r) {
+  if (points.length < 2) return '';
+  if (points.length === 2) {
+    return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
+  }
+
+  let d = `M ${points[0].x} ${points[0].y}`;
+
+  for (let i = 1; i < points.length - 1; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const next = points[i + 1];
+
+    const dist1 = Math.hypot(curr.x - prev.x, curr.y - prev.y);
+    const dist2 = Math.hypot(next.x - curr.x, next.y - curr.y);
+    // Clamp radius so corners on short segments don't overshoot
+    const rr = Math.min(r, dist1 / 2, dist2 / 2);
+
+    if (rr < 0.5) {
+      d += ` L ${curr.x} ${curr.y}`;
+      continue;
+    }
+
+    const dx1 = (curr.x - prev.x) / dist1;
+    const dy1 = (curr.y - prev.y) / dist1;
+    const dx2 = (next.x - curr.x) / dist2;
+    const dy2 = (next.y - curr.y) / dist2;
+
+    const beforeX = curr.x - dx1 * rr;
+    const beforeY = curr.y - dy1 * rr;
+    const afterX  = curr.x + dx2 * rr;
+    const afterY  = curr.y + dy2 * rr;
+
+    d += ` L ${beforeX} ${beforeY} Q ${curr.x} ${curr.y} ${afterX} ${afterY}`;
+  }
+
+  const last = points[points.length - 1];
+  d += ` L ${last.x} ${last.y}`;
+  return d;
+}
+
+function computePath(from, to, sSide, eSide, via) {
+  return roundedPath(pathPoints(from, to, sSide, eSide, via), CORNER_R);
 }

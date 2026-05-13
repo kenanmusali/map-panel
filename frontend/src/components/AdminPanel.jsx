@@ -1,12 +1,7 @@
-import { useState } from 'react';
-import { Plus, Trash2, Pill, Square, SquareDashed } from './icons.jsx';
+// AdminPanel.jsx - Fixed with auto-height on drag
+import { useState, useRef } from 'react';
+import { Plus, Trash2, Pill, Square, SquareDashed, GripVertical, Eye, Archive } from './icons.jsx';
 
-/**
- * Right-side editor panel. Three sections:
- *   1. PANELS — add / edit / delete lanes
- *   2. NODES — quick-add buttons for the 3 node types
- *   3. SELECTED — edit currently selected node or lane
- */
 export default function AdminPanel({ process, selection, setSelection, updateProcess }) {
   return (
     <aside className="admin-panel">
@@ -16,53 +11,143 @@ export default function AdminPanel({ process, selection, setSelection, updatePro
         setSelection={setSelection}
         updateProcess={updateProcess}
       />
-
       <NodesSection
         process={process}
         setSelection={setSelection}
         updateProcess={updateProcess}
       />
-
       <SelectedSection
         process={process}
         selection={selection}
         setSelection={setSelection}
         updateProcess={updateProcess}
       />
-
-      <CanvasSection
-        process={process}
-        updateProcess={updateProcess}
-      />
+      <CanvasSection process={process} updateProcess={updateProcess} />
     </aside>
   );
 }
 
 /* =====================================================
-   PANELS (Lanes) section
+   Repack lanes — recalculate y and auto-height based on nodes
+   Min panel width 180px, height auto fits content
+   ===================================================== */
+function repackLanes(lanes, nodes) {
+  let y = 20;
+  return lanes.map(l => {
+    // Calculate auto-height based on nodes in this lane
+    const laneNodes = nodes.filter(n => n.laneId === l.id);
+    let minHeight = 180; // Min height 180px
+    if (laneNodes.length > 0) {
+      const maxBottom = Math.max(...laneNodes.map(n => (n.y || 0) + (n.h || 100)));
+      const laneTop = y;
+      minHeight = Math.max(minHeight, maxBottom - laneTop + 40);
+    }
+    const packed = { ...l, y, h: minHeight };
+    y += minHeight;
+    return packed;
+  });
+}
+
+/* =====================================================
+   PANELS section
    ===================================================== */
 function PanelsSection({ process, selection, setSelection, updateProcess }) {
+  const [newPanelName, setNewPanelName] = useState('');
+  const dragIdx = useRef(null);
+  const [dragOver, setDragOver] = useState(null);
+
   function addLane() {
-    const lanes = process.lanes;
-    const lastY = lanes.length ? (lanes[lanes.length - 1].y + lanes[lanes.length - 1].h) : 20;
-    const newLane = {
-      id: `lane-${Date.now()}`,
-      label: `Yeni panel ${lanes.length + 1}`,
-      y: lastY,
-      h: 180
-    };
-    const newHeight = Math.max(process.height, lastY + 180 + 40);
-    updateProcess(p => ({ ...p, lanes: [...p.lanes, newLane], height: newHeight }));
+    if (!newPanelName.trim()) return;
+    const newLane = { id: `lane-${Date.now()}`, label: newPanelName.trim(), y: 0, h: 180 };
+    updateProcess(p => {
+      const newLanes = [...p.lanes, newLane];
+      const repacked = repackLanes(newLanes, p.nodes);
+      const newHeight = Math.max(p.height, repacked[repacked.length - 1]?.y + repacked[repacked.length - 1]?.h + 40 || 600);
+      return { ...p, lanes: repacked, height: newHeight };
+    });
+    setNewPanelName('');
     setSelection({ kind: 'lane', id: process.lanes.length });
   }
 
   function deleteLane(index) {
-    if (!confirm('Bu paneli silmək istəyirsiniz? Daxilindəki node-lar saxlanılacaq, amma yenidən mövqeyə salınması tələb oluna bilər.')) return;
-    updateProcess(p => ({
-      ...p,
-      lanes: p.lanes.filter((_, i) => i !== index)
+    const laneToDelete = process.lanes[index];
+    if (!confirm(`"${laneToDelete.label}" panelini silmək istəyirsiniz? Panel daxilindəki node-lar silinəcək.`)) return;
+    
+    updateProcess(p => {
+      const remainingNodes = p.nodes.filter(node => node.laneId !== laneToDelete.id);
+      const remainingLanes = p.lanes.filter((_, i) => i !== index);
+      const repackedLanes = repackLanes(remainingLanes, remainingNodes);
+      
+      // Update node Y positions
+      const updatedNodes = remainingNodes.map(node => {
+        const nodeLane = repackedLanes.find(l => l.id === node.laneId);
+        if (nodeLane) {
+          const oldLane = p.lanes.find(l => l.id === node.laneId);
+          const yOffset = nodeLane.y - (oldLane?.y || 0);
+          return { ...node, y: node.y + yOffset };
+        }
+        return node;
+      });
+      
+      return { ...p, lanes: repackedLanes, nodes: updatedNodes };
+    });
+    if (selection?.kind === 'lane' && selection.id === index) setSelection(null);
+  }
+
+  function renamePanel(id, value) {
+    updateProcess(prev => ({
+      ...prev,
+      lanes: prev.lanes.map(l => l.id === id ? { ...l, label: value } : l)
     }));
-    setSelection(null);
+  }
+
+  function onDragStart(e, idx) {
+    dragIdx.current = idx;
+    e.dataTransfer.effectAllowed = 'move';
+  }
+
+  function onDragOver(e, idx) {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOver(idx);
+  }
+
+  function onDrop(e, dropIdx) {
+    e.preventDefault();
+    const fromIdx = dragIdx.current;
+    if (fromIdx === null || fromIdx === dropIdx) {
+      setDragOver(null);
+      return;
+    }
+    
+    updateProcess(p => {
+      const lanes = [...p.lanes];
+      const [movedLane] = lanes.splice(fromIdx, 1);
+      lanes.splice(dropIdx, 0, movedLane);
+      
+      const repacked = repackLanes(lanes, p.nodes);
+      
+      const updatedNodes = p.nodes.map(node => {
+        const oldLane = p.lanes.find(l => l.id === node.laneId);
+        const newLane = repacked.find(l => l.id === node.laneId);
+        if (oldLane && newLane) {
+          const yOffset = newLane.y - oldLane.y;
+          return { ...node, y: node.y + yOffset };
+        }
+        return node;
+      });
+      
+      return { ...p, lanes: repacked, nodes: updatedNodes };
+    });
+    
+    if (selection?.kind === 'lane') setSelection(null);
+    dragIdx.current = null;
+    setDragOver(null);
+  }
+
+  function onDragEnd() {
+    dragIdx.current = null;
+    setDragOver(null);
   }
 
   return (
@@ -74,21 +159,46 @@ function PanelsSection({ process, selection, setSelection, updateProcess }) {
         </button>
       </header>
 
+      <div style={{ display: 'flex', gap: '8px', marginBottom: '16px' }}>
+        <input
+          value={newPanelName}
+          onChange={e => setNewPanelName(e.target.value)}
+          onKeyDown={e => e.key === 'Enter' && addLane()}
+          placeholder="Yeni panel adı"
+          style={{ flex: 1, padding: '10px' }}
+        />
+      </div>
+
       <div className="panel-list">
         {process.lanes.length === 0 && (
           <div className="hint">Hələ panel yoxdur. "Əlavə et" düyməsinə basın.</div>
         )}
         {process.lanes.map((lane, i) => {
           const isSel = selection?.kind === 'lane' && selection.id === i;
+          const isDragTarget = dragOver === i;
+          const nodeCount = process.nodes.filter(n => n.laneId === lane.id).length;
           return (
             <div
               key={lane.id}
-              className={`panel-item ${isSel ? 'selected' : ''}`}
+              className={`panel-item ${isSel ? 'selected' : ''} ${isDragTarget ? 'drag-over' : ''}`}
               onClick={() => setSelection({ kind: 'lane', id: i })}
+              draggable
+              onDragStart={e => onDragStart(e, i)}
+              onDragOver={e => onDragOver(e, i)}
+              onDrop={e => onDrop(e, i)}
+              onDragEnd={onDragEnd}
             >
+              <div className="drag-handle" title="Sürükləyin">
+                <GripVertical size={14} />
+              </div>
               <div className="panel-bar" />
-              <div className="panel-name">{lane.label}</div>
-              <div className="panel-meta">h: {lane.h}px</div>
+              <input
+                value={lane.label}
+                onChange={e => renamePanel(lane.id, e.target.value)}
+                onClick={e => e.stopPropagation()}
+                style={{ flex: 1, padding: '4px 6px', marginRight: '8px', fontSize: '14px', border: '1px solid #ddd', borderRadius: '4px' }}
+              />
+              <div className="panel-meta">{nodeCount} node | h: {lane.h}px</div>
               <button
                 className="icon-btn ghost danger"
                 onClick={(e) => { e.stopPropagation(); deleteLane(i); }}
@@ -100,12 +210,27 @@ function PanelsSection({ process, selection, setSelection, updateProcess }) {
           );
         })}
       </div>
+
+      <div className="field-row two" style={{ marginTop: '16px', gap: '8px' }}>
+        <button className="btn" onClick={() => updateProcess(prev => ({ ...prev, archived: !prev.archived }))}>
+          {process.archived ? 'Arxivdən çıxar' : 'Arxiv et'}
+        </button>
+        {process.archived && (
+          <button className="btn danger" onClick={() => {
+            if (confirm('Bu prosesi tamamilə silmək istəyirsiniz? Bu əməliyyat geri alına bilməz.')) {
+              updateProcess(prev => ({ ...prev, deleted: true }));
+            }
+          }}>
+            <Trash2 size={14} /> <span>Sil</span>
+          </button>
+        )}
+      </div>
     </section>
   );
 }
 
 /* =====================================================
-   NODES section — quick-add 3 types
+   NODES section - vertical stacking
    ===================================================== */
 function NodesSection({ process, setSelection, updateProcess }) {
   const [targetLane, setTargetLane] = useState(0);
@@ -118,64 +243,57 @@ function NodesSection({ process, setSelection, updateProcess }) {
   }
 
   function addNode(type) {
-    if (process.lanes.length === 0) {
-      alert('Əvvəlcə bir panel əlavə edin.');
-      return;
-    }
+    if (process.lanes.length === 0) { alert('Əvvəlcə bir panel əlavə edin.'); return; }
     const lane = process.lanes[Math.min(targetLane, process.lanes.length - 1)];
     const id = nextNodeId();
     const defaults = nodeDefaults(type);
+    
+    // Vertical stacking - find bottommost node in this lane
+    const laneNodes = process.nodes.filter(n => n.laneId === lane.id);
+    let y = lane.y + 20;
+    if (laneNodes.length > 0) {
+      const maxBottom = Math.max(...laneNodes.map(n => (n.y || 0) + (n.h || 100)));
+      y = maxBottom + 20;
+    }
+    
     const node = {
-      id,
-      type,
-      x: 80,
-      y: lane.y + 20,
-      ...defaults,
-      text: `Yeni ${type === 'pill' ? 'başlangıc/son' : type === 'rect' ? 'addım' : 'alt-addım'}`,
-      info: { general: [''], risks: [''] },
-      diagramType: type === 'pill' ? 'start-end' : type === 'rect' ? 'process' : 'decision',
-      popup: 'Yeni popup məlumatı'
+      id, type, x: lane.y + 80, y, laneId: lane.id, ...defaults,
+      text: `Yeni ${type === 'pill' ? 'başlanğıc/son' : type === 'rect' ? 'addım' : 'alt-addım'}`,
+      info: { general: [''], risks: [''] }
     };
-    updateProcess(p => ({ ...p, nodes: [...p.nodes, node] }));
+    
+    updateProcess(p => {
+      const newNodes = [...p.nodes, node];
+      const repackedLanes = repackLanes(p.lanes, newNodes);
+      return { ...p, nodes: newNodes, lanes: repackedLanes };
+    });
     setSelection({ kind: 'node', id });
   }
 
   return (
     <section className="panel-section">
-      <header>
-        <h3>NODE ƏLAVƏ ET</h3>
-      </header>
-
+      <header><h3>NODE ƏLAVƏ ET</h3></header>
       <div className="field-row">
         <label className="lbl">Panel:</label>
-        <select
-          value={targetLane}
-          onChange={e => setTargetLane(Number(e.target.value))}
-          disabled={process.lanes.length === 0}
-        >
-          {process.lanes.length === 0 ? (
-            <option>Panel yoxdur</option>
-          ) : process.lanes.map((l, i) => (
-            <option key={l.id} value={i}>{l.label}</option>
-          ))}
+        <select value={targetLane} onChange={e => setTargetLane(Number(e.target.value))} disabled={process.lanes.length === 0}>
+          {process.lanes.length === 0
+            ? <option>Panel yoxdur</option>
+            : process.lanes.map((l, i) => <option key={l.id} value={i}>{l.label}</option>)
+          }
         </select>
       </div>
-
       <div className="node-types">
-        <button className="type-btn" onClick={() => addNode('pill')} title="Başlanğıc / son node">
+        <button className="type-btn" onClick={() => addNode('pill')}>
           <div className="type-preview pill"><Pill size={14} /></div>
-          <span>Pill</span>
-          <small>Başlanğıc / son</small>
+          <span>Pill</span><small>Başlanğıc/son</small>
         </button>
-        <button className="type-btn" onClick={() => addNode('rect')} title="Normal addım">
+        <button className="type-btn" onClick={() => addNode('rect')}>
           <div className="type-preview rect"><Square size={14} /></div>
-          <span>Rect</span>
-          <small>Normal addım</small>
+          <span>Rect</span><small>Normal addım</small>
         </button>
-        <button className="type-btn" onClick={() => addNode('stroke')} title="Alt-addım (kontur)">
+        <button className="type-btn" onClick={() => addNode('stroke')}>
           <div className="type-preview stroke"><SquareDashed size={14} /></div>
-          <span>Stroke</span>
-          <small>Alt-addım</small>
+          <span>Stroke</span><small>Alt-addım</small>
         </button>
       </div>
     </section>
@@ -184,15 +302,15 @@ function NodesSection({ process, setSelection, updateProcess }) {
 
 function nodeDefaults(type) {
   switch (type) {
-    case 'pill':   return { w: 230, h: 100 };
-    case 'rect':   return { w: 220, h: 90 };
-    case 'stroke': return { w: 260, h: 80 };
-    default:       return { w: 220, h: 90 };
+    case 'pill': return { w: 200, h: 50 };
+    case 'rect': return { w: 200, h: 70 };
+    case 'stroke': return { w: 220, h: 60 };
+    default: return { w: 200, h: 70 };
   }
 }
 
 /* =====================================================
-   SELECTED — properties of selected node or lane
+   SELECTED
    ===================================================== */
 function SelectedSection({ process, selection, setSelection, updateProcess }) {
   if (!selection) {
@@ -208,6 +326,7 @@ function SelectedSection({ process, selection, setSelection, updateProcess }) {
     return <LaneEditor
       lane={process.lanes[selection.id]}
       laneIndex={selection.id}
+      process={process}
       updateProcess={updateProcess}
       onDelete={() => setSelection(null)}
     />;
@@ -221,52 +340,59 @@ function SelectedSection({ process, selection, setSelection, updateProcess }) {
     </section>
   );
 
-  return <NodeEditor
-    node={node}
-    process={process}
-    updateProcess={updateProcess}
-    onDelete={() => setSelection(null)}
-  />;
+  return <NodeEditor node={node} process={process} updateProcess={updateProcess} onDelete={() => setSelection(null)} />;
 }
 
 /* =====================================================
    Lane editor
    ===================================================== */
-function LaneEditor({ lane, laneIndex, updateProcess, onDelete }) {
+function LaneEditor({ lane, laneIndex, process, updateProcess, onDelete }) {
   function patch(field, value) {
-    updateProcess(p => ({
-      ...p,
-      lanes: p.lanes.map((l, i) => i === laneIndex ? { ...l, [field]: value } : l)
-    }));
+    updateProcess(p => {
+      const newLanes = p.lanes.map((l, i) => i === laneIndex ? { ...l, [field]: value } : l);
+      const repacked = repackLanes(newLanes, p.nodes);
+      return { ...p, lanes: repacked };
+    });
   }
+
+  function recalcHeight() {
+    updateProcess(p => {
+      const repacked = repackLanes(p.lanes, p.nodes);
+      return { ...p, lanes: repacked };
+    });
+  }
+
+  const nodeCount = process.nodes.filter(n => n.laneId === lane.id).length;
 
   return (
     <section className="panel-section">
       <header><h3>PANEL REDAKTƏSİ</h3></header>
-
       <div className="field-row col">
-        <label>Ad (yeni sətr üçün <kbd>Enter</kbd>)</label>
-        <textarea
-          rows={3}
-          value={lane.label}
-          onChange={e => patch('label', e.target.value)}
-        />
+        <label>Ad</label>
+        <textarea rows={3} value={lane.label} onChange={e => patch('label', e.target.value)} />
       </div>
-
       <div className="field-row two">
         <div>
           <label>Y (top)</label>
           <input type="number" value={lane.y} onChange={e => patch('y', Number(e.target.value))} />
         </div>
         <div>
-          <label>Hündürlük</label>
+          <label>Min Hündürlük</label>
           <input type="number" value={lane.h} onChange={e => patch('h', Number(e.target.value))} />
         </div>
       </div>
-
+      <div className="hint" style={{ marginBottom: '12px' }}>
+        Panel daxilində {nodeCount} node var. Hündürlük avtomatik olaraq node-lara uyğun tənzimlənir.
+        <button className="icon-btn" onClick={recalcHeight} style={{ marginLeft: '8px' }}>Yenilə</button>
+      </div>
       <button className="btn danger" onClick={() => {
         if (!confirm('Bu paneli silmək istəyirsiniz?')) return;
-        updateProcess(p => ({ ...p, lanes: p.lanes.filter((_, i) => i !== laneIndex) }));
+        updateProcess(p => {
+          const remainingNodes = p.nodes.filter(n => n.laneId !== lane.id);
+          const remainingLanes = p.lanes.filter((_, i) => i !== laneIndex);
+          const repacked = repackLanes(remainingLanes, remainingNodes);
+          return { ...p, lanes: repacked, nodes: remainingNodes };
+        });
         onDelete();
       }}>
         <Trash2 size={14} /><span>Paneli sil</span>
@@ -279,16 +405,18 @@ function LaneEditor({ lane, laneIndex, updateProcess, onDelete }) {
    Node editor
    ===================================================== */
 function NodeEditor({ node, process, updateProcess, onDelete }) {
+  const [showPreview, setShowPreview] = useState(false);
+
   function patch(field, value) {
-    updateProcess(p => ({
-      ...p,
-      nodes: p.nodes.map(n => String(n.id) === String(node.id) ? { ...n, [field]: value } : n)
-    }));
+    updateProcess(p => {
+      const newNodes = p.nodes.map(n => String(n.id) === String(node.id) ? { ...n, [field]: value } : n);
+      const repacked = repackLanes(p.lanes, newNodes);
+      return { ...p, nodes: newNodes, lanes: repacked };
+    });
   }
 
   function patchInfo(field, value) {
-    const info = { ...(node.info || {}), [field]: value };
-    patch('info', info);
+    patch('info', { ...(node.info || {}), [field]: value });
   }
 
   function changeId(newId) {
@@ -302,18 +430,19 @@ function NodeEditor({ node, process, updateProcess, onDelete }) {
       edges: p.edges.map(e => ({
         ...e,
         from: String(e.from) === String(node.id) ? parsed : e.from,
-        to:   String(e.to)   === String(node.id) ? parsed : e.to
+        to: String(e.to) === String(node.id) ? parsed : e.to
       }))
     }));
   }
 
   function deleteNode() {
     if (!confirm('Bu node-u silmək istəyirsiniz?')) return;
-    updateProcess(p => ({
-      ...p,
-      nodes: p.nodes.filter(n => String(n.id) !== String(node.id)),
-      edges: p.edges.filter(e => String(e.from) !== String(node.id) && String(e.to) !== String(node.id))
-    }));
+    updateProcess(p => {
+      const newNodes = p.nodes.filter(n => String(n.id) !== String(node.id));
+      const newEdges = p.edges.filter(e => String(e.from) !== String(node.id) && String(e.to) !== String(node.id));
+      const repacked = repackLanes(p.lanes, newNodes);
+      return { ...p, nodes: newNodes, edges: newEdges, lanes: repacked };
+    });
     onDelete();
   }
 
@@ -327,29 +456,21 @@ function NodeEditor({ node, process, updateProcess, onDelete }) {
       <div className="field-row two">
         <div>
           <label>ID</label>
-          <input
-            defaultValue={node.id}
-            onBlur={e => changeId(e.target.value)}
-            placeholder="1, 2, 5.1..."
-          />
+          <input defaultValue={node.id} onBlur={e => changeId(e.target.value)} />
         </div>
         <div>
           <label>Tip</label>
           <select value={node.type} onChange={e => patch('type', e.target.value)}>
-            <option value="pill">Pill (başlanğıc/son)</option>
-            <option value="rect">Rect (normal)</option>
-            <option value="stroke">Stroke (alt-addım)</option>
+            <option value="pill">Pill</option>
+            <option value="rect">Rect</option>
+            <option value="stroke">Stroke</option>
           </select>
         </div>
       </div>
 
       <div className="field-row col">
         <label>Mətn</label>
-        <textarea
-          rows={3}
-          value={node.text}
-          onChange={e => patch('text', e.target.value)}
-        />
+        <textarea rows={3} value={node.text} onChange={e => patch('text', e.target.value)} />
       </div>
 
       <div className="field-row four">
@@ -359,10 +480,20 @@ function NodeEditor({ node, process, updateProcess, onDelete }) {
         <div><label>Hün.</label><input type="number" value={node.h} onChange={e => patch('h', Number(e.target.value))} /></div>
       </div>
 
+      <div className="field-row col">
+        <label>Panel</label>
+        <select value={node.laneId || ''} onChange={e => patch('laneId', e.target.value)}>
+          <option value="">— Seç —</option>
+          {process.lanes.map(lane => (
+            <option key={lane.id} value={lane.id}>{lane.label}</option>
+          ))}
+        </select>
+      </div>
+
       <details className="info-edit">
-        <summary>Ümumi məlumat / Risklər (popup)</summary>
+        <summary>Ümumi məlumat / Risklər</summary>
         <div className="field-row col">
-          <label>Ümumi məlumat (hər abzas yeni sətrdə)</label>
+          <label>Ümumi məlumat</label>
           <textarea
             rows={5}
             value={(node.info?.general || []).join('\n\n')}
@@ -370,13 +501,18 @@ function NodeEditor({ node, process, updateProcess, onDelete }) {
           />
         </div>
         <div className="field-row col">
-          <label>Risklər (hər biri yeni sətrdə)</label>
+          <label>Risklər</label>
           <textarea
             rows={4}
             value={(node.info?.risks || []).join('\n')}
             onChange={e => patchInfo('risks', e.target.value.split('\n').filter(Boolean))}
           />
         </div>
+        <button className="btn preview-btn" onClick={() => setShowPreview(v => !v)}>
+          <Eye size={14} />
+          <span>{showPreview ? 'Bağla' : 'Önizlə'}</span>
+        </button>
+        {showPreview && <PopupPreview node={node} />}
       </details>
 
       <EdgesEditor node={node} process={process} updateProcess={updateProcess} />
@@ -388,32 +524,40 @@ function NodeEditor({ node, process, updateProcess, onDelete }) {
   );
 }
 
-/* =====================================================
-   Edges editor (per-node, outgoing connections)
-   ===================================================== */
+function PopupPreview({ node }) {
+  const info = node.info || { general: [], risks: [] };
+  const general = Array.isArray(info.general) ? info.general.filter(Boolean) : [];
+  const risks = Array.isArray(info.risks) ? info.risks.filter(Boolean) : [];
+
+  return (
+    <div className="popup-preview-card">
+      <div className="popup-preview-title">{node.text}</div>
+      {general.map((p, i) => <p key={i} className="popup-preview-p">{p}</p>)}
+      {risks.length > 0 && (
+        <>
+          <div className="popup-preview-heading preview-risks">⚠️ Risklər:</div>
+          <ul className="popup-preview-list">
+            {risks.map((r, i) => <li key={i}>{r}</li>)}
+          </ul>
+        </>
+      )}
+    </div>
+  );
+}
+
 function EdgesEditor({ node, process, updateProcess }) {
   const [targetId, setTargetId] = useState('');
   const [sSide, setSSide] = useState('bottom');
   const [eSide, setESide] = useState('top');
   const [dashed, setDashed] = useState(false);
 
-  const outgoing = process.edges
-    .map((e, i) => ({ ...e, idx: i }))
-    .filter(e => String(e.from) === String(node.id));
+  const outgoing = process.edges.filter(e => String(e.from) === String(node.id));
 
   function addEdge() {
     if (!targetId) { alert('Hədəf node seçin.'); return; }
     const target = process.nodes.find(n => String(n.id) === String(targetId));
     if (!target) { alert('Hədəf node tapılmadı.'); return; }
-    const parsed = /^\d+$/.test(targetId) ? Number(targetId) : targetId;
-    const newEdge = {
-      from: node.id,
-      to: parsed,
-      s: sSide,
-      e: eSide,
-      dashed
-    };
-    updateProcess(p => ({ ...p, edges: [...p.edges, newEdge] }));
+    updateProcess(p => ({ ...p, edges: [...p.edges, { from: node.id, to: targetId, s: sSide, e: eSide, dashed }] }));
     setTargetId('');
   }
 
@@ -432,35 +576,29 @@ function EdgesEditor({ node, process, updateProcess }) {
 
   return (
     <details className="edges-edit" open>
-      <summary>Bu node-dan çıxan oxlar ({outgoing.length})</summary>
-
+      <summary>Oxlar ({outgoing.length})</summary>
       <div className="edges-list">
-        {outgoing.map(e => {
+        {outgoing.map((e, idx) => {
           const tgt = process.nodes.find(n => String(n.id) === String(e.to));
           return (
-            <div key={e.idx} className="edge-item">
+            <div key={idx} className="edge-item">
               <div className="edge-row">
-                <span className="edge-arrow">→</span>
-                <strong>#{e.to}</strong>
-                <span className="edge-tgt">{tgt?.text?.slice(0, 30) || ''}{tgt?.text?.length > 30 ? '…' : ''}</span>
-                <button className="icon-btn ghost danger" onClick={() => deleteEdge(e.idx)}><Trash2 size={12} /></button>
+                <span>→ #{e.to}</span>
+                <span className="edge-tgt">{tgt?.text?.slice(0, 30)}</span>
+                <button className="icon-btn ghost danger" onClick={() => deleteEdge(idx)}><Trash2 size={12} /></button>
               </div>
               <div className="edge-row sm">
-                <select value={e.s || 'bottom'} onChange={ev => updateEdge(e.idx, { s: ev.target.value })}>
-                  <option value="top">üst</option>
-                  <option value="right">sağ</option>
-                  <option value="bottom">alt</option>
-                  <option value="left">sol</option>
+                <select value={e.s || 'bottom'} onChange={ev => updateEdge(idx, { s: ev.target.value })}>
+                  <option value="top">üst</option><option value="right">sağ</option>
+                  <option value="bottom">alt</option><option value="left">sol</option>
                 </select>
                 <span>→</span>
-                <select value={e.e || 'top'} onChange={ev => updateEdge(e.idx, { e: ev.target.value })}>
-                  <option value="top">üst</option>
-                  <option value="right">sağ</option>
-                  <option value="bottom">alt</option>
-                  <option value="left">sol</option>
+                <select value={e.e || 'top'} onChange={ev => updateEdge(idx, { e: ev.target.value })}>
+                  <option value="top">üst</option><option value="right">sağ</option>
+                  <option value="bottom">alt</option><option value="left">sol</option>
                 </select>
                 <label className="check">
-                  <input type="checkbox" checked={!!e.dashed} onChange={ev => updateEdge(e.idx, { dashed: ev.target.checked })} />
+                  <input type="checkbox" checked={!!e.dashed} onChange={ev => updateEdge(idx, { dashed: ev.target.checked })} />
                   <span>kəsik</span>
                 </label>
               </div>
@@ -468,17 +606,11 @@ function EdgesEditor({ node, process, updateProcess }) {
           );
         })}
       </div>
-
       <div className="edge-add">
-        <div className="field-row col">
-          <label>Yeni ox — hədəf node</label>
-          <select value={targetId} onChange={e => setTargetId(e.target.value)}>
-            <option value="">— Seç —</option>
-            {otherNodes.map(n => (
-              <option key={n.id} value={n.id}>#{n.id} — {n.text?.slice(0, 32)}</option>
-            ))}
-          </select>
-        </div>
+        <select value={targetId} onChange={e => setTargetId(e.target.value)}>
+          <option value="">— Seç —</option>
+          {otherNodes.map(n => <option key={n.id} value={n.id}>#{n.id} — {n.text?.slice(0, 32)}</option>)}
+        </select>
         <div className="field-row three">
           <select value={sSide} onChange={e => setSSide(e.target.value)}>
             <option value="top">üst</option><option value="right">sağ</option>
@@ -488,10 +620,13 @@ function EdgesEditor({ node, process, updateProcess }) {
             <option value="top">üst</option><option value="right">sağ</option>
             <option value="bottom">alt</option><option value="left">sol</option>
           </select>
-          <label className="check"><input type="checkbox" checked={dashed} onChange={e => setDashed(e.target.checked)} /><span>kəsik</span></label>
+          <label className="check">
+            <input type="checkbox" checked={dashed} onChange={e => setDashed(e.target.checked)} />
+            <span>kəsik</span>
+          </label>
         </div>
         <button className="btn primary small" onClick={addEdge}>
-          <Plus size={14} /><span>Ox əlavə et</span>
+          <Plus size={14} /> Ox əlavə et
         </button>
       </div>
     </details>
@@ -499,7 +634,7 @@ function EdgesEditor({ node, process, updateProcess }) {
 }
 
 /* =====================================================
-   Canvas size
+   Canvas Section - width 100%, height auto fit content
    ===================================================== */
 function CanvasSection({ process, updateProcess }) {
   return (
@@ -507,20 +642,18 @@ function CanvasSection({ process, updateProcess }) {
       <header><h3>CANVAS ÖLÇÜSÜ</h3></header>
       <div className="field-row two">
         <div>
-          <label>En</label>
-          <input type="number" value={process.width}
-            onChange={e => updateProcess(p => ({ ...p, width: Number(e.target.value) }))} />
-        </div>
-        <div>
-          <label>Hündürlük</label>
-          <input type="number" value={process.height}
-            onChange={e => updateProcess(p => ({ ...p, height: Number(e.target.value) }))} />
+          <label>En (px)</label>
+          <input 
+            type="number" 
+            value={process.width} 
+            onChange={e => updateProcess(p => ({ ...p, width: Number(e.target.value) }))}
+            style={{ width: '100%' }}
+          />
+          <small style={{ fontSize: '10px', color: 'var(--text-muted)' }}>Minimal en 800px</small>
         </div>
       </div>
-      <div className="field-row col">
-        <label>Başlıq</label>
-        <input value={process.title}
-          onChange={e => updateProcess(p => ({ ...p, title: e.target.value }))} />
+      <div className="hint">
+        Hündürlük avtomatik tənzimlənir. Panel hündürlükləri node-lara uyğun olaraq dəyişir.
       </div>
     </section>
   );

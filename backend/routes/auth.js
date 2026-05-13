@@ -1,46 +1,97 @@
-import { Router } from 'express';
+import express from 'express';
 import jwt from 'jsonwebtoken';
 
-const router = Router();
+const router = express.Router();
 
-router.post('/login', (req, res) => {
-  const { username, password } = req.body || {};
-  if (!username || !password) {
-    return res.status(400).json({ error: 'username and password required' });
+const USERS = [
+  {
+    username: 'admin',
+    password: 'admin123',
+    role: 'admin'
+  },
+  {
+    username: 'user',
+    password: 'user123',
+    role: 'viewer'
   }
-
-  const okUser = username === process.env.AUTH_USERNAME;
-  const okPass = password === process.env.AUTH_PASSWORD;
-  if (!okUser || !okPass) {
-    return res.status(401).json({ error: 'Invalid credentials' });
-  }
-
-  const secret = process.env.JWT_SECRET;
-  if (!secret || secret.length < 16) {
-    return res.status(500).json({ error: 'Server misconfigured: JWT_SECRET' });
-  }
-
-  const token = jwt.sign({ sub: username }, secret, {
-    expiresIn: process.env.TOKEN_EXPIRES_IN || '7d'
-  });
-  res.json({ token, user: { username } });
-});
-
-router.get('/me', requireAuth, (req, res) => {
-  res.json({ user: req.user });
-});
+];
 
 export function requireAuth(req, res, next) {
-  const auth = req.headers.authorization || '';
-  const token = auth.startsWith('Bearer ') ? auth.slice(7) : null;
-  if (!token) return res.status(401).json({ error: 'Missing token' });
+
   try {
-    const payload = jwt.verify(token, process.env.JWT_SECRET);
-    req.user = { username: payload.sub };
+
+    const authHeader =
+      req.headers.authorization || '';
+
+    if (!authHeader.startsWith('Bearer ')) {
+
+      return res.status(401).json({
+        error: 'Unauthorized'
+      });
+    }
+
+    const token =
+      authHeader.replace('Bearer ', '');
+
+    const decoded = jwt.verify(
+      token,
+      process.env.JWT_SECRET || 'absheron-secret'
+    );
+
+    req.user = decoded;
+
     next();
+
   } catch (e) {
-    res.status(401).json({ error: 'Invalid or expired token' });
+
+    return res.status(401).json({
+      error: 'Invalid token'
+    });
   }
 }
+
+router.post('/login', (req, res) => {
+
+  const { username, password } = req.body;
+
+  const user = USERS.find(
+    x =>
+      x.username === username &&
+      x.password === password
+  );
+
+  if (!user) {
+
+    return res.status(401).json({
+      error: 'Bad credentials'
+    });
+  }
+
+  const token = jwt.sign(
+    {
+      username: user.username,
+      role: user.role
+    },
+    process.env.JWT_SECRET || 'absheron-secret'
+  );
+
+  res.json({
+    token,
+    role: user.role,
+    username: user.username
+  });
+});
+
+router.get(
+  '/me',
+  requireAuth,
+  (req, res) => {
+
+    res.json({
+      username: req.user.username,
+      role: req.user.role
+    });
+  }
+);
 
 export default router;

@@ -1,7 +1,20 @@
 {
   "processes": [
-    { "id": 1, "title": "Vaqonların Mərkəzə qəbulu prosesi" },
-    { "id": 2, "title": "Dəmir yolu ilə daxil olan yüklərə dair sənədlərin çeşidlənməsi prosesi" },
-    { "id": 3, "title": "Dəmir yolu ilə idxal olunan vaqon yüklərinin yük avtomobilinə boşaldılması və müştəriyə təhvil verilməsi iş axını" }
+    {
+      "id": 1,
+      "title": "Vaqonların Mərkəzə qəbulu prosesi"
+    },
+    {
+      "id": 2,
+      "title": "Dəmir yolu ilə daxil olan yüklərə dair sənədlərin çeşidlənməsi prosesi"
+    },
+    {
+      "id": 3,
+      "title": "Dəmir yolu ilə idxal olunan vaqon yüklərinin yük avtomobilinə boşaldılması və müştəriyə təhvil verilməsi iş axını"
+    },
+    {
+      "id": 4,
+      "title": "dcsdc"
+    }
   ]
 }

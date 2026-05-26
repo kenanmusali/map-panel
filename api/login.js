@@ -12,7 +12,7 @@ const USERS = [
   { username: 'user', password: 'user123', role: 'viewer' }
 ];
 
-app.post('/api/login', (req, res) => {
+app.post('/login', (req, res) => {
   const { username, password } = req.body;
   const user = USERS.find(x => x.username === username && x.password === password);
   

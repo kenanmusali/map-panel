@@ -4,7 +4,7 @@ let app;
 
 module.exports = async (req, res) => {
   if (!app) {
-    const mod = await import('../backend/server.js');
+    const mod = await import('../server.js');
     app = mod.default;
   }
   app(req, res);

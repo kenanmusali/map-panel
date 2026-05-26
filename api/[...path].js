@@ -1,6 +1,5 @@
-import app from '../backend/server.js';
+const app = require('../backend/server.js');
 
-export default function handler(req, res) {
-  console.log('[api catchall]', req.method, req.url);
+module.exports = (req, res) => {
   return app(req, res);
-}
+};

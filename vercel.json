@@ -1,36 +1,4 @@
 {
-  "version": 2,
-  "builds": [
-    {
-      "src": "frontend/package.json",
-      "use": "@vercel/static-build",
-      "config": {
-        "distDir": "dist"
-      }
-    },
-    {
-      "src": "api/index.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/login.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/health.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/processes.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/pdfs.js",
-      "use": "@vercel/node"
-    },
-    {
-      "src": "api/[...path].js",
-      "use": "@vercel/node"
-    }
-  ]
+  "version": 2
 }
+

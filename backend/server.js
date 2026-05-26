@@ -34,12 +34,10 @@ app.use(express.json({
   limit: '25mb'
 }));
 
+// DEBUG
 console.log('SERVER LOADED');
 
-// IMPORTANT:
-// Vercel forwards /api/* 그대로.
-// So Express routes MUST keep /api prefix.
-
+// HEALTH
 app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
@@ -72,4 +70,5 @@ if (process.env.VERCEL !== '1') {
   });
 }
 
+// VERCEL EXPORT
 export default app;

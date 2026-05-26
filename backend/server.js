@@ -38,7 +38,13 @@ app.use((err, _req, res, _next) => {
   res.status(status).json({ error: err.message || 'Server error' });
 });
 
-app.listen(PORT, () => {
-  console.log(`\n  Abşeron backend running on http://localhost:${PORT}`);
-  console.log(`  GitHub repo: ${process.env.GITHUB_OWNER}/${process.env.GITHUB_REPO} (${process.env.GITHUB_BRANCH})\n`);
-});
+// Only start the HTTP server when running locally (not on Vercel)
+if (process.env.VERCEL !== '1') {
+  app.listen(PORT, () => {
+    console.log(`\n  Abşeron backend running on http://localhost:${PORT}`);
+    console.log(`  GitHub repo: ${process.env.GITHUB_OWNER}/${process.env.GITHUB_REPO} (${process.env.GITHUB_BRANCH})\n`);
+  });
+}
+
+// Export for Vercel serverless
+export default app;

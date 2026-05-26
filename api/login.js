@@ -1,28 +1,29 @@
-const express = require('express');
-const jwt = require('jsonwebtoken');
-
-const USERS = [
-  { username: 'admin', password: 'admin123', role: 'admin' },
-  { username: 'user', password: 'user123', role: 'viewer' }
-];
-
 module.exports = (req, res) => {
-  if (req.method !== 'POST') {
-    return res.status(405).json({ error: 'Method not allowed' });
-  }
-
-  const { username, password } = req.body;
-  const user = USERS.find(x => x.username === username && x.password === password);
+  res.setHeader('Content-Type', 'application/json');
   
-  if (!user) {
-    return res.status(401).json({ error: 'Bad credentials' });
+  if (req.method !== 'POST') {
+    res.status(405);
+    res.end(JSON.stringify({ error: 'Method not allowed' }));
+    return;
   }
 
-  const token = jwt.sign(
-    { username: user.username, role: user.role },
-    process.env.JWT_SECRET || 'absheron-secret'
-  );
-
-  res.status(200).json({ token, role: user.role, username: user.username });
+  let body = '';
+  req.on('data', chunk => body += chunk);
+  req.on('end', () => {
+    try {
+      const { username, password } = JSON.parse(body);
+      
+      if (username === 'admin' && password === 'admin123') {
+        res.status(200);
+        res.end(JSON.stringify({ token: 'fake-jwt-token', role: 'admin', username: 'admin' }));
+      } else {
+        res.status(401);
+        res.end(JSON.stringify({ error: 'Bad credentials' }));
+      }
+    } catch (e) {
+      res.status(400);
+      res.end(JSON.stringify({ error: 'Invalid JSON' }));
+    }
+  });
 };
 

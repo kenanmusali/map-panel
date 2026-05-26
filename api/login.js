@@ -1,18 +1,16 @@
 const express = require('express');
-const cors = require('cors');
 const jwt = require('jsonwebtoken');
-
-const app = express();
-
-app.use(cors({ origin: '*', credentials: false }));
-app.use(express.json({ limit: '25mb' }));
 
 const USERS = [
   { username: 'admin', password: 'admin123', role: 'admin' },
   { username: 'user', password: 'user123', role: 'viewer' }
 ];
 
-app.post('/login', (req, res) => {
+module.exports = (req, res) => {
+  if (req.method !== 'POST') {
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
   const { username, password } = req.body;
   const user = USERS.find(x => x.username === username && x.password === password);
   
@@ -25,7 +23,6 @@ app.post('/login', (req, res) => {
     process.env.JWT_SECRET || 'absheron-secret'
   );
 
-  res.json({ token, role: user.role, username: user.username });
-});
+  res.status(200).json({ token, role: user.role, username: user.username });
+};
 
-module.exports = app;

@@ -52,6 +52,16 @@ app.use('/api', authRouter);
 app.use('/api/processes', requireAuth, processesRouter);
 app.use('/api/pdfs', requireAuth, pdfsRouter);
 
+// 404 — show the URL Express actually saw, so we can debug from Vercel logs
+app.use((req, res) => {
+  console.warn('[404]', req.method, req.url);
+  res.status(404).json({
+    error: 'Route not found',
+    method: req.method,
+    url: req.url
+  });
+});
+
 // ERROR HANDLER
 app.use((err, _req, res, _next) => {
   console.error('[ERROR]', err);

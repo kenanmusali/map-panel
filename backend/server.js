@@ -38,7 +38,7 @@ app.use((err, _req, res, _next) => {
   res.status(status).json({ error: err.message || 'Server error' });
 });
 
-// Only start the HTTP server when running locally (not on Vercel)
+// Only start HTTP server when running locally (not on Vercel)
 if (process.env.VERCEL !== '1') {
   app.listen(PORT, () => {
     console.log(`\n  Abşeron backend running on http://localhost:${PORT}`);

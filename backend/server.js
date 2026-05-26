@@ -38,7 +38,7 @@ app.use(express.json({
 console.log('SERVER LOADED');
 
 // HEALTH
-app.get('/api/health', (_req, res) => {
+app.get(['/api/health', '/health'], (_req, res) => {
   res.json({
     ok: true,
     ts: Date.now()
@@ -46,11 +46,11 @@ app.get('/api/health', (_req, res) => {
 });
 
 // PUBLIC ROUTES
-app.use('/api', authRouter);
+app.use(['/api', '/'], authRouter);
 
 // PROTECTED ROUTES
-app.use('/api/processes', requireAuth, processesRouter);
-app.use('/api/pdfs', requireAuth, pdfsRouter);
+app.use(['/api/processes', '/processes'], requireAuth, processesRouter);
+app.use(['/api/pdfs', '/pdfs'], requireAuth, pdfsRouter);
 
 // 404 — show the URL Express actually saw, so we can debug from Vercel logs
 app.use((req, res) => {

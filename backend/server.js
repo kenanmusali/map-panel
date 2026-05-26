@@ -34,11 +34,13 @@ app.use(express.json({
   limit: '25mb'
 }));
 
-// DEBUG
 console.log('SERVER LOADED');
 
-// HEALTH
-app.get('/health', (_req, res) => {
+// IMPORTANT:
+// Vercel forwards /api/* 그대로.
+// So Express routes MUST keep /api prefix.
+
+app.get('/api/health', (_req, res) => {
   res.json({
     ok: true,
     ts: Date.now()
@@ -46,11 +48,11 @@ app.get('/health', (_req, res) => {
 });
 
 // PUBLIC ROUTES
-app.use('/', authRouter);
+app.use('/api', authRouter);
 
 // PROTECTED ROUTES
-app.use('/processes', requireAuth, processesRouter);
-app.use('/pdfs', requireAuth, pdfsRouter);
+app.use('/api/processes', requireAuth, processesRouter);
+app.use('/api/pdfs', requireAuth, pdfsRouter);
 
 // ERROR HANDLER
 app.use((err, _req, res, _next) => {
@@ -70,5 +72,4 @@ if (process.env.VERCEL !== '1') {
   });
 }
 
-// VERCEL EXPORT
 export default app;

@@ -1399,8 +1399,10 @@ details[open] summary::before { transform: rotate(90deg); }
   width: 100%;
 }
 
-/* Lane rail min width */
-.lane-rail {
+.logo-mark {
+  display: none;
+}
+ .lane-rail {
   position: absolute;
   left: 0;
   width: 56px;

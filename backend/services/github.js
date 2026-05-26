@@ -134,3 +134,130 @@ export async function deleteFile(p) {
   if (!hasGithubConfig()) return localDelete(p);
   return localDelete(p);
 }
+
+/* ============================================================
+   BINARY FILE HELPERS (for PDFs, images, etc.)
+   Separate from the JSON helpers above so each path is clean.
+   ============================================================ */
+
+async function localGetBinary(p) {
+  try {
+    const full = path.join(LOCAL_DATA_DIR, p);
+    return await fs.readFile(full);
+  } catch {
+    return null;
+  }
+}
+
+async function localPutBinary(p, buffer) {
+  const full = path.join(LOCAL_DATA_DIR, p);
+  await fs.mkdir(path.dirname(full), { recursive: true });
+  await fs.writeFile(full, buffer);
+  return { ok: true };
+}
+
+async function localDeleteBinary(p) {
+  try {
+    const full = path.join(LOCAL_DATA_DIR, p);
+    await fs.unlink(full);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function ghGetBinarySha(p) {
+  const { GITHUB_BRANCH } = cfg();
+  const res = await fetch(`${urlFor(p)}?ref=${encodeURIComponent(GITHUB_BRANCH)}`, {
+    headers: headers()
+  });
+  if (res.status === 404) return null;
+  if (!res.ok) throw new Error(await res.text());
+  const data = await res.json();
+  return data.sha || null;
+}
+
+export async function getBinary(p) {
+  if (!hasGithubConfig()) return localGetBinary(p);
+
+  try {
+    const { GITHUB_BRANCH } = cfg();
+    const res = await fetch(`${urlFor(p)}?ref=${encodeURIComponent(GITHUB_BRANCH)}`, {
+      headers: headers()
+    });
+    if (res.status === 404) return localGetBinary(p);
+    if (!res.ok) throw new Error(await res.text());
+
+    const data = await res.json();
+    // If file is large (>1MB) GitHub returns empty content + download_url
+    if (data.content) {
+      return Buffer.from(data.content.replace(/\n/g, ''), 'base64');
+    }
+    if (data.download_url) {
+      const raw = await fetch(data.download_url, { headers: { Authorization: `Bearer ${cfg().GITHUB_TOKEN}` } });
+      if (!raw.ok) throw new Error('download_url fetch failed');
+      const ab = await raw.arrayBuffer();
+      return Buffer.from(ab);
+    }
+    return null;
+  } catch {
+    return localGetBinary(p);
+  }
+}
+
+export async function putBinary(p, buffer, { message } = {}) {
+  // Always mirror to local store too — keeps things working offline / on token error
+  await localPutBinary(p, buffer);
+
+  if (!hasGithubConfig()) return { ok: true };
+
+  try {
+    const { GITHUB_BRANCH } = cfg();
+    const sha = await ghGetBinarySha(p).catch(() => null);
+    const body = {
+      message: message || `Update ${p}`,
+      content: buffer.toString('base64'),
+      branch: GITHUB_BRANCH
+    };
+    if (sha) body.sha = sha;
+
+    const res = await fetch(urlFor(p), {
+      method: 'PUT',
+      headers: headers(),
+      body: JSON.stringify(body)
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  } catch (e) {
+    // local copy already saved — surface the error so caller knows GH didn't sync
+    console.error('[putBinary] GitHub sync failed:', e.message);
+    return { ok: true, githubSynced: false };
+  }
+}
+
+export async function deleteBinary(p, { message } = {}) {
+  await localDeleteBinary(p);
+
+  if (!hasGithubConfig()) return { ok: true };
+
+  try {
+    const sha = await ghGetBinarySha(p);
+    if (!sha) return { ok: true };
+
+    const { GITHUB_BRANCH } = cfg();
+    const res = await fetch(urlFor(p), {
+      method: 'DELETE',
+      headers: headers(),
+      body: JSON.stringify({
+        message: message || `Delete ${p}`,
+        sha,
+        branch: GITHUB_BRANCH
+      })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  } catch (e) {
+    console.error('[deleteBinary] GitHub sync failed:', e.message);
+    return { ok: true, githubSynced: false };
+  }
+}

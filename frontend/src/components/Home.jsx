@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { LogoFull } from './Logo.jsx';
-import { Search, LogOut, Plus, Loader2, Trash2, Archive } from './icons.jsx';
+import { Search, LogOut, Plus, Loader2, Trash2, Archive, ChevronLeft } from './icons.jsx';
 import { api, setToken } from '../api/client.js';
 
 function fmtTime(d) {
@@ -17,7 +17,7 @@ function fmtDate(d) {
   return `${dd}.${mm}.${d.getFullYear()}`;
 }
 
-export default function Home({ onOpen, onLogout }) {
+export default function Home({ onOpen, onLogout, onBack }) {
   const [now, setNow] = useState(new Date());
   const [query, setQuery] = useState('');
   const [processes, setProcesses] = useState([]);
@@ -104,6 +104,11 @@ export default function Home({ onOpen, onLogout }) {
     <>
       <div className="topbar">
         <div className="top-left">
+          {onBack && (
+            <button className="pill-chip back-chip" onClick={onBack}>
+              <ChevronLeft size={16} /><span>Geri</span>
+            </button>
+          )}
           <div className="pill-chip">{fmtTime(now)}</div>
           <div className="pill-chip">{fmtDate(now)}</div>
         </div>

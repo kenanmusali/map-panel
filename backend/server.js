@@ -3,6 +3,7 @@ import express from 'express';
 import cors from 'cors';
 import authRouter, { requireAuth } from './routes/auth.js';
 import processesRouter from './routes/processes.js';
+import pdfsRouter from './routes/pdfs.js';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -17,7 +18,8 @@ app.use(cors({
   credentials: false
 }));
 
-app.use(express.json({ limit: '2mb' }));
+// 25 MB — PDFs are sent as base64 JSON
+app.use(express.json({ limit: '25mb' }));
 
 // Health
 app.get('/api/health', (_req, res) => res.json({ ok: true, ts: Date.now() }));
@@ -27,6 +29,7 @@ app.use('/api', authRouter);
 
 // Protected routes
 app.use('/api/processes', requireAuth, processesRouter);
+app.use('/api/pdfs', requireAuth, pdfsRouter);
 
 // Error handler
 app.use((err, _req, res, _next) => {

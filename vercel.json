@@ -1,6 +1,5 @@
 {
   "version": 2,
-
   "builds": [
     {
       "src": "frontend/package.json",
@@ -14,13 +13,6 @@
       "use": "@vercel/node"
     }
   ],
-
-  "functions": {
-    "api/index.js": {
-      "runtime": "@vercel/node@3.0.7"
-    }
-  },
-
   "routes": [
     {
       "src": "/api/(.*)",

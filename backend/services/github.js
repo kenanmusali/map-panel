@@ -2,13 +2,16 @@
 import fs from 'fs/promises';
 import os from 'os';
 import path from 'path';
+import { fileURLToPath } from 'url';
 
 const API_BASE = 'https://api.github.com';
-const DEFAULT_DATA_DIR = path.resolve(process.cwd(), 'data-store');
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const DEFAULT_DATA_DIR = path.resolve(__dirname, '../data-store');
+const isVercel = !!(process.env.VERCEL === '1' || process.env.VERCEL_ENV || process.env.NOW_REGION);
 const LOCAL_DATA_DIR = process.env.LOCAL_DATA_DIR ||
-  (process.env.VERCEL === '1'
+  (isVercel
     ? path.join(os.tmpdir(), 'data-store')
-    : path.resolve(process.cwd(), 'data-store'));
+    : path.resolve(__dirname, '../data-store'));
 
 function cfg() {
   const { GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO, GITHUB_BRANCH = 'main' } = process.env;
@@ -159,7 +162,12 @@ async function localGetBinary(p) {
     const full = path.join(LOCAL_DATA_DIR, p);
     return await fs.readFile(full);
   } catch {
-    return null;
+    try {
+      const full = path.join(DEFAULT_DATA_DIR, p);
+      return await fs.readFile(full);
+    } catch {
+      return null;
+    }
   }
 }
 

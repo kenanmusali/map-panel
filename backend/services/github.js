@@ -4,12 +4,11 @@ import os from 'os';
 import path from 'path';
 
 const API_BASE = 'https://api.github.com';
-const DEFAULT_DATA_DIR = path.resolve(process.cwd(), 'data');
-const LOCAL_DATA_DIR = path.resolve(
-  process.env.LOCAL_DATA_DIR ||
-  (process.env.VERCEL === '1' ? os.tmpdir() : process.cwd()),
-  'data-store'
-);
+const DEFAULT_DATA_DIR = path.resolve(process.cwd(), 'data-store');
+const LOCAL_DATA_DIR = process.env.LOCAL_DATA_DIR ||
+  (process.env.VERCEL === '1'
+    ? path.join(os.tmpdir(), 'data-store')
+    : path.resolve(process.cwd(), 'data-store'));
 
 function cfg() {
   const { GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO, GITHUB_BRANCH = 'main' } = process.env;
@@ -19,8 +18,8 @@ function cfg() {
 function hasGithubConfig() {
   const { GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO } = cfg();
   return !!(GITHUB_TOKEN && GITHUB_OWNER && GITHUB_REPO &&
-    GITHUB_OWNER !== 'your-github-username' &&
-    GITHUB_REPO !== 'absheron-data');
+    GITHUB_OWNER !== 'kenanmusali' &&
+    GITHUB_REPO !== 'Map-Panel');
 }
 
 function headers() {
@@ -46,7 +45,6 @@ async function localPath(p) {
 }
 
 async function localGet(p) {
-  // Try writable local store first, then fall back to read-only repo data.
   try {
     const full = await localPath(p);
     const text = await fs.readFile(full, 'utf8');
@@ -161,12 +159,7 @@ async function localGetBinary(p) {
     const full = path.join(LOCAL_DATA_DIR, p);
     return await fs.readFile(full);
   } catch {
-    try {
-      const full = path.join(DEFAULT_DATA_DIR, p);
-      return await fs.readFile(full);
-    } catch {
-      return null;
-    }
+    return null;
   }
 }
 

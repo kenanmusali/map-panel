@@ -315,3 +315,41 @@ export async function deleteBinary(p, { message } = {}) {
     return { ok: true, githubSynced: false };
   }
 }
+
+/* ============================================================
+   DIAGNOSTICS — safe to expose (no token, no secrets)
+   ============================================================ */
+export async function diagnose() {
+  const { GITHUB_OWNER, GITHUB_REPO, GITHUB_BRANCH } = cfg();
+  const out = {
+    isVercel,
+    githubConfigured: hasGithubConfig(),
+    owner: GITHUB_OWNER || null,
+    repo: GITHUB_REPO || null,
+    branch: GITHUB_BRANCH || null
+  };
+
+  // Probe GitHub directly (surfaces the real HTTP status: 200 ok, 401 bad token, 404 wrong path/branch)
+  if (hasGithubConfig()) {
+    for (const p of ['data/diagrams/index.json', 'data/files/index.json']) {
+      try {
+        const res = await fetch(`${urlFor(p)}?ref=${encodeURIComponent(GITHUB_BRANCH)}`, { headers: headers() });
+        out[p] = { githubStatus: res.status };
+      } catch (e) {
+        out[p] = { githubError: e.message };
+      }
+    }
+  }
+
+  // What the app actually resolves (after local + GitHub fallback)
+  try {
+    const d = await getFile('data/diagrams/index.json');
+    out.diagramsResolved = d ? (d.content?.processes?.length ?? 0) : 'NOT FOUND';
+  } catch (e) { out.diagramsResolved = 'ERR: ' + e.message; }
+  try {
+    const f = await getFile('data/files/index.json');
+    out.pdfsResolved = f ? (f.content?.pdfs?.length ?? 0) : 'NOT FOUND';
+  } catch (e) { out.pdfsResolved = 'ERR: ' + e.message; }
+
+  return out;
+}

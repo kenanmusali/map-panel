@@ -5,6 +5,7 @@ import cors from 'cors';
 import authRouter, { requireAuth } from './routes/auth.js';
 import processesRouter from './routes/processes.js';
 import pdfsRouter from './routes/pdfs.js';
+import { diagnose } from './services/github.js';
 
 const app = express();
 const PORT = process.env.PORT || 4000;
@@ -43,6 +44,15 @@ app.get(['/api/health', '/health'], (_req, res) => {
     ok: true,
     ts: Date.now()
   });
+});
+
+// DEBUG — public, no secrets. Tells you why data isn't loading on Vercel.
+app.get(['/api/debug', '/debug'], async (_req, res) => {
+  try {
+    res.json(await diagnose());
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // PUBLIC ROUTES

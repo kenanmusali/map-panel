@@ -1,9 +1,15 @@
 
 import fs from 'fs/promises';
+import os from 'os';
 import path from 'path';
 
 const API_BASE = 'https://api.github.com';
-const LOCAL_DATA_DIR = path.resolve(process.cwd(), 'data-store');
+const DEFAULT_DATA_DIR = path.resolve(process.cwd(), 'data');
+const LOCAL_DATA_DIR = path.resolve(
+  process.env.LOCAL_DATA_DIR ||
+  (process.env.VERCEL === '1' ? os.tmpdir() : process.cwd()),
+  'data-store'
+);
 
 function cfg() {
   const { GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO, GITHUB_BRANCH = 'main' } = process.env;
@@ -40,6 +46,7 @@ async function localPath(p) {
 }
 
 async function localGet(p) {
+  // Try writable local store first, then fall back to read-only repo data.
   try {
     const full = await localPath(p);
     const text = await fs.readFile(full, 'utf8');
@@ -48,7 +55,16 @@ async function localGet(p) {
       sha: 'local'
     };
   } catch {
-    return null;
+    try {
+      const full = path.join(DEFAULT_DATA_DIR, p);
+      const text = await fs.readFile(full, 'utf8');
+      return {
+        content: JSON.parse(text),
+        sha: 'local'
+      };
+    } catch {
+      return null;
+    }
   }
 }
 
@@ -145,7 +161,12 @@ async function localGetBinary(p) {
     const full = path.join(LOCAL_DATA_DIR, p);
     return await fs.readFile(full);
   } catch {
-    return null;
+    try {
+      const full = path.join(DEFAULT_DATA_DIR, p);
+      return await fs.readFile(full);
+    } catch {
+      return null;
+    }
   }
 }
 

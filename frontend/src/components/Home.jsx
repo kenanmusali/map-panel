@@ -144,7 +144,16 @@ export default function Home({ onOpen, onLogout, onBack }) {
             <div key={p.id || p._id} className="process-item" onClick={() => onOpen(p.id || p._id)}>
               <div className="num">{p.id || p._id}</div>
               <div className="label">{p.title}</div>
-              {!isViewer && <div style={{ marginLeft:'auto', fontSize:'13px', color:'var(--text-muted)' }}>Redaktə et</div>}
+              {!isViewer && (
+                <button
+                  className="delete-archive-btn"
+                  title="Sil"
+                  style={{ marginLeft: 'auto' }}
+                  onClick={(e) => deleteProcess(e, p)}
+                >
+                  <Trash2 size={16} />
+                </button>
+              )}
             </div>
           ))}
 

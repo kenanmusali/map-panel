@@ -8,7 +8,7 @@ import Diagram from './components/Diagram.jsx';
 import PdfList from './components/pdfs/PdfList.jsx';
 
 export default function App() {
-  // views: 'login' | 'hub' | 'diagrams' | 'pdfs' | 'diagram'
+  // views: 'login' | 'hub' | 'diagrams' | 'pdfs' | 'files' | 'diagram'
   const [view, setView] = useState('login');
   const [user, setUser] = useState(null);
   const [processId, setProcessId] = useState(null);

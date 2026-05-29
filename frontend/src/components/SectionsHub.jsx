@@ -41,6 +41,8 @@ function PdfTileIcon() {
   );
 }
 
+function FileTileIcon_REMOVED() { return null; }
+
 export default function SectionsHub({ onPick, onLogout }) {
   const [now, setNow] = useState(new Date());
   useEffect(() => {

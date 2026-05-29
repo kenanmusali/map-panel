@@ -6,12 +6,14 @@ import { fileURLToPath } from 'url';
 
 const API_BASE = 'https://api.github.com';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const DEFAULT_DATA_DIR = path.resolve(__dirname, '../data-store');
+// Project root (…/backend/services -> …/)  — the real `data/` folder lives here.
+const REPO_ROOT = path.resolve(__dirname, '../..');
+const DEFAULT_DATA_DIR = REPO_ROOT;
 const isVercel = !!(process.env.VERCEL === '1' || process.env.VERCEL_ENV || process.env.NOW_REGION);
 const LOCAL_DATA_DIR = process.env.LOCAL_DATA_DIR ||
   (isVercel
-    ? path.join(os.tmpdir(), 'data-store')
-    : path.resolve(__dirname, '../data-store'));
+    ? path.join(os.tmpdir(), 'mappanel-data')
+    : REPO_ROOT);
 
 function cfg() {
   const { GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO, GITHUB_BRANCH = 'main' } = process.env;
@@ -20,9 +22,7 @@ function cfg() {
 
 function hasGithubConfig() {
   const { GITHUB_TOKEN, GITHUB_OWNER, GITHUB_REPO } = cfg();
-  return !!(GITHUB_TOKEN && GITHUB_OWNER && GITHUB_REPO &&
-    GITHUB_OWNER !== 'kenanmusali' &&
-    GITHUB_REPO !== 'Map-Panel');
+  return !!(GITHUB_TOKEN && GITHUB_OWNER && GITHUB_REPO);
 }
 
 function headers() {
@@ -86,6 +86,12 @@ async function localDelete(p) {
 }
 
 export async function getFile(p) {
+  // Locally, the project `data/` folder is the source of truth.
+  if (!isVercel) {
+    const local = await localGet(p);
+    if (local) return local;
+  }
+
   if (!hasGithubConfig()) return localGet(p);
 
   try {
@@ -94,7 +100,7 @@ export async function getFile(p) {
       headers: headers()
     });
 
-    if (res.status === 404) return null;
+    if (res.status === 404) return localGet(p);
     if (!res.ok) throw new Error(await res.text());
 
     const data = await res.json();
@@ -110,14 +116,16 @@ export async function getFile(p) {
 }
 
 export async function putFile(p, contentObject, { message, sha } = {}) {
-  if (!hasGithubConfig()) return localPut(p, contentObject);
+  // Always keep the local `data/` folder in sync
+  await localPut(p, contentObject).catch(() => {});
+
+  if (!hasGithubConfig()) return { ok: true };
 
   try {
     const { GITHUB_BRANCH } = cfg();
 
     if (sha === undefined) {
-      const current = await getFile(p);
-      sha = current?.sha;
+      sha = await ghGetBinarySha(p).catch(() => null);
     }
 
     const content = Buffer.from(
@@ -142,14 +150,38 @@ export async function putFile(p, contentObject, { message, sha } = {}) {
     if (!res.ok) throw new Error(await res.text());
 
     return res.json();
-  } catch {
-    return localPut(p, contentObject);
+  } catch (e) {
+    console.error('[putFile] GitHub sync failed:', e.message);
+    return { ok: true, githubSynced: false };
   }
 }
 
-export async function deleteFile(p) {
-  if (!hasGithubConfig()) return localDelete(p);
-  return localDelete(p);
+export async function deleteFile(p, { message } = {}) {
+  // Always remove the local mirror first
+  await localDelete(p);
+
+  if (!hasGithubConfig()) return { ok: true };
+
+  try {
+    const sha = await ghGetBinarySha(p).catch(() => null);
+    if (!sha) return { ok: true };
+
+    const { GITHUB_BRANCH } = cfg();
+    const res = await fetch(urlFor(p), {
+      method: 'DELETE',
+      headers: headers(),
+      body: JSON.stringify({
+        message: message || `Delete ${p}`,
+        sha,
+        branch: GITHUB_BRANCH
+      })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    return res.json();
+  } catch (e) {
+    console.error('[deleteFile] GitHub sync failed:', e.message);
+    return { ok: true, githubSynced: false };
+  }
 }
 
 /* ============================================================

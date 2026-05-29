@@ -4,8 +4,8 @@ import { getFile, putFile, deleteFile } from '../services/github.js';
 const router = Router();
 const dataPath = () => (process.env.DATA_PATH || 'data').replace(/^\/|\/$/g, '');
 
-const indexPath = () => `${dataPath()}/index.json`;
-const processPath = id => `${dataPath()}/processes/process-${id}.json`;
+const indexPath = () => `${dataPath()}/diagrams/index.json`;
+const processPath = id => `${dataPath()}/diagrams/processes/process-${id}.json`;
 
 async function readIndex() {
   const file = await getFile(indexPath());

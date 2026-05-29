@@ -50,5 +50,8 @@ export const api = {
   getProcess:    (id) => request('GET', `/api/processes/${id}`),
   createProcess: (data) => request('POST', '/api/processes', data),
   updateProcess: (id, data) => request('PUT', `/api/processes/${id}`, data),
-  deleteProcess: (id) => request('DELETE', `/api/processes/${id}`)
+  deleteProcess: (id) => request('DELETE', `/api/processes/${id}`),
+  
+  // Files
+  listFiles: () => request('GET', '/api/files')
 };

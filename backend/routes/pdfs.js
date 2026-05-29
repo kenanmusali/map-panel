@@ -4,17 +4,24 @@ import { getFile, putFile, deleteFile, getBinary, putBinary, deleteBinary } from
 const router = Router();
 const dataPath = () => (process.env.DATA_PATH || 'data').replace(/^\/|\/$/g, '');
 
-const pdfIndexPath = () => `${dataPath()}/pdfs/index.json`;
-const pdfFilePath  = (id) => `${dataPath()}/pdfs/files/pdf-${id}.pdf`;
+const pdfIndexPathLegacy = () => `${dataPath()}/pdfs/index.json`;
+const pdfIndexPathFiles = () => `${dataPath()}/files/index.json`;
+const pdfFilePathLegacy  = (id) => `${dataPath()}/pdfs/files/pdf-${id}.pdf`;
+const pdfFilePathLegacy2 = (id) => `${dataPath()}/files/files/pdf-${id}.pdf`;
+const pdfFilePathFiles   = (id) => `${dataPath()}/files/pdf/pdf-${id}.pdf`;
 
 async function readIndex() {
-  const file = await getFile(pdfIndexPath());
-  if (!file) return { pdfs: [] };
-  return file.content;
+  // Try legacy `data/pdfs/index.json` first, then `data/files/index.json`
+  let file = await getFile(pdfIndexPathLegacy());
+  if (file) return file.content;
+  file = await getFile(pdfIndexPathFiles());
+  if (file) return file.content;
+  return { pdfs: [] };
 }
 
 async function writeIndex(content, message) {
-  return putFile(pdfIndexPath(), content, { message });
+  // Prefer writing to `data/files/index.json` (where PDFs are stored in this project)
+  return putFile(pdfIndexPathFiles(), content, { message });
 }
 
 function requireAdmin(req, res, next) {
@@ -38,7 +45,10 @@ router.get('/:id/file', async (req, res, next) => {
     const meta = (idx.pdfs || []).find(p => Number(p.id) === Number(id));
     if (!meta) return res.status(404).json({ error: 'PDF not found' });
 
-    const bin = await getBinary(pdfFilePath(id));
+    // Try new path first, then legacy paths
+    let bin = await getBinary(pdfFilePathFiles(id));
+    if (!bin) bin = await getBinary(pdfFilePathLegacy(id));
+    if (!bin) bin = await getBinary(pdfFilePathLegacy2(id));
     if (!bin) return res.status(404).json({ error: 'PDF file missing' });
 
     res.setHeader('Content-Type', 'application/pdf');
@@ -62,7 +72,8 @@ router.post('/', requireAdmin, async (req, res, next) => {
     const newId = existingIds.length ? Math.max(...existingIds) + 1 : 1;
 
     const buf = Buffer.from(dataBase64, 'base64');
-    await putBinary(pdfFilePath(newId), buf, { message: `Add pdf ${newId}` });
+    // Write binaries into data/files by default
+    await putBinary(pdfFilePathFiles(newId), buf, { message: `Add pdf ${newId}` });
 
     const entry = {
       id: newId,
@@ -97,7 +108,8 @@ router.put('/:id', requireAdmin, async (req, res, next) => {
 
     if (dataBase64) {
       const buf = Buffer.from(dataBase64, 'base64');
-      await putBinary(pdfFilePath(id), buf, { message: `Replace pdf ${id}` });
+      // Replace binary in files path
+      await putBinary(pdfFilePathFiles(id), buf, { message: `Replace pdf ${id}` });
       updated.size = buf.length;
       updated.uploadedAt = new Date().toISOString();
     }
@@ -114,7 +126,10 @@ router.delete('/:id', requireAdmin, async (req, res, next) => {
     const id = Number(req.params.id);
     const idx = await readIndex();
     const list = (idx.pdfs || []).filter(p => Number(p.id) !== id);
-    await deleteBinary(pdfFilePath(id), { message: `Delete pdf ${id}` });
+    // Delete from new path and any legacy paths
+    await deleteBinary(pdfFilePathFiles(id), { message: `Delete pdf ${id}` }).catch(() => {});
+    await deleteBinary(pdfFilePathLegacy(id), { message: `Delete pdf ${id}` }).catch(() => {});
+    await deleteBinary(pdfFilePathLegacy2(id), { message: `Delete pdf ${id}` }).catch(() => {});
     await writeIndex({ ...idx, pdfs: list }, `Remove pdf ${id} from index`);
     res.json({ ok: true });
   } catch (e) { next(e); }

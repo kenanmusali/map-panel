@@ -1,4 +1,4 @@
-import LogoSvg from './header-logo.svg';
+import LogoSvg from '../header-logo.svg';
 
 export function LogoMark({ size = 44 }) {
   return (

@@ -45,7 +45,7 @@ export default function PdfFormModal({ mode, pdf, onClose, onSave }) {
   return (
     <div className="pdf-modal-backdrop" onClick={onClose}>
       <form className="pdf-modal-card" onClick={(e) => e.stopPropagation()} onSubmit={submit}>
-        <div className="pdf-modal-head">
+        <div className="pdf-modal-head nospace">
           <h3>{isEdit ? 'PDF redaktə et' : 'Yeni PDF əlavə et'}</h3>
           <button type="button" className="pdf-modal-close" onClick={onClose} aria-label="Bağla">
             <X size={18} />

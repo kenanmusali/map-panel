@@ -444,7 +444,7 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
           )}
 
           {!isViewer && (
-            <button className="pill-chip edit-chip" onClick={toggleEdit}>
+            <button className="pill-chip edit-chip nospace" onClick={toggleEdit}>
               {editMode ? <Eye size={16} /> : <Edit3 size={16} />}
               <span>{editMode ? 'Baxış' : 'Redaktə et'}</span>
             </button>

@@ -131,6 +131,11 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.02em; }
 .back-chip .label {
   white-space: normal; overflow: hidden;
   line-height: 1.28; max-height: 2.56em; word-break: break-word;
+  text-align: left;
+}
+
+.nospace {
+  white-space: nowrap !important;
 }
 /* clock/date chips are non-interactive labels */
 .top-left .pill-chip:not(.back-chip) { color: var(--text-muted); font-weight: 500; cursor: default; }

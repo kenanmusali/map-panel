@@ -190,7 +190,7 @@ export default function PdfList({ onBack, onLogout }) {
                 {isAdmin && (
                   <>
                     <button
-                      className="pdf-action-btn pdf-action-btn-icon"
+                      className="pdf-action-btn pdf-action-btn-icon nospace"
                       onClick={(e) => { e.stopPropagation(); setModal({ mode: 'edit', pdf: p }); }}
                       title="Redaktə et"
                     >

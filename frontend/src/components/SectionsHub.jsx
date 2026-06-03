@@ -78,14 +78,14 @@ export default function SectionsHub({ onPick, onLogout }) {
         <div className="sections-grid">
           <button className="section-tile" onClick={() => onPick('diagrams')}>
             <div className="section-tile-icon"><DiagramTileIcon /></div>
-            <div className="section-tile-title">Diaqramlar</div>
+            <div className="section-tile-title">İş Axışları</div>
             <div className="section-tile-sub">Proses xəritələri</div>
           </button>
 
           <button className="section-tile" onClick={() => onPick('pdfs')}>
             <div className="section-tile-icon"><PdfTileIcon /></div>
-            <div className="section-tile-title">PDF</div>
-            <div className="section-tile-sub">Sənədlər</div>
+            <div className="section-tile-title">Normativ Sənədlər</div>
+            <div className="section-tile-sub">Prosedurlar, prosesler, əsəsnamələr</div>
           </button>
         </div>
       </div>

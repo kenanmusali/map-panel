@@ -129,7 +129,7 @@ export default function PdfList({ onBack, onLogout }) {
           <LogOut size={16} /><span>Çıxış</span>
         </button>
       </div>
-
+<br />
       <div className="home-wrap">
         <LogoFull size="large" />
         <h2 className="home-title">Normativ Sənədlər</h2>

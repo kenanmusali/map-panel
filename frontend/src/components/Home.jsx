@@ -139,7 +139,7 @@ export default function Home({ onOpen, onLogout, onBack }) {
           <LogOut size={16} /><span>Çıxış</span>
         </button>
       </div>
-
+<br />
       <div className="home-wrap">
         <LogoFull size="large" />
         <h2 className="home-title">

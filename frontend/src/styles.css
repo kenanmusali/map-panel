@@ -86,7 +86,8 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.02em; }
 /* ============================================================
    LOGO
    ============================================================ */
-.logo-row { display: flex; align-items: center; gap: 14px; }
+.logo-row { display: flex; align-items: center; justify-content: center; gap: 14px; width: 100%; }
+.logo-full { display: block; height: auto; max-width: 100%; margin: 0 auto; }
 .logo-mark {
   border-radius: 22%;
   background: var(--primary);
@@ -125,9 +126,12 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.02em; }
   transition: background 0.15s var(--ease), color 0.15s var(--ease);
 }
 .pill-chip:hover { background: var(--bg-soft); }
-.back-chip { cursor: pointer; max-width: 520px; color: var(--text-primary); font-weight: 700; }
+.back-chip { cursor: pointer; max-width: 460px; color: var(--text-primary); font-weight: 700; }
 .back-chip:hover { background: var(--bg-soft); }
-.back-chip .label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.back-chip .label {
+  white-space: normal; overflow: hidden;
+  line-height: 1.28; max-height: 2.56em; word-break: break-word;
+}
 /* clock/date chips are non-interactive labels */
 .top-left .pill-chip:not(.back-chip) { color: var(--text-muted); font-weight: 500; cursor: default; }
 .top-left .pill-chip:not(.back-chip):hover { background: transparent; }
@@ -394,6 +398,8 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.02em; }
 .draft-btn.primary:hover { background: var(--primary-hover); }
 
 /* Lanes */
+.rail-layer { position: absolute; top: 0; left: 0; width: 56px; height: 100%; z-index: 6; pointer-events: none; will-change: transform; }
+.rail-layer .lane-rail { pointer-events: auto; }
 .lane-rail {
   position: absolute; left: 0; width: 56px;
   background: var(--primary);

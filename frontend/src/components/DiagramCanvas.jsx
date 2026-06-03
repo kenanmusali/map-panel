@@ -1,5 +1,5 @@
 // DiagramCanvas.jsx
-import { useRef, useState, useMemo } from 'react';
+import { useRef, useState, useMemo, useEffect } from 'react';
 
 const SNAP_SIZE = 10;
 const RAIL_W = 56;
@@ -24,6 +24,7 @@ export default function DiagramCanvas({
   onCreateEdge
 }) {
   const canvasRef = useRef(null);
+  const railLayerRef = useRef(null);
   const [drag, setDrag] = useState(null);
   const [hoverNodeId, setHoverNodeId] = useState(null);
   const [link, setLink] = useState(null);   // { fromId, fromSide, from:{x,y}, cur:{x,y}, overId }
@@ -44,6 +45,28 @@ export default function DiagramCanvas({
       canvasH: Math.max(MIN_H, contentBottom + PAD_BOTTOM)
     };
   }, [process.nodes, process.lanes]);
+
+  // Pin lane rails to the left edge of the scroll viewport while scrolling
+  // horizontally (counter-translate by scrollLeft). Vertical scroll is untouched,
+  // so rails still move with their lanes.
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const scroller = canvas?.parentElement; // .diagram-container (overflow:auto)
+    if (!canvas || !scroller) return;
+    let raf = 0;
+    const apply = () => {
+      raf = 0;
+      const layer = railLayerRef.current;
+      if (layer) layer.style.transform = `translateX(${scroller.scrollLeft}px)`;
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(apply); };
+    apply(); // initial
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      scroller.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [canvasW, canvasH]);
 
   // Convert a mouse event into canvas-local coordinates
   function toCanvasPoint(e) {
@@ -125,21 +148,23 @@ export default function DiagramCanvas({
       onMouseUp={endDrag}
       onMouseLeave={endDrag}
     >
-      {/* Lane rails (left vertical labels) */}
-      {process.lanes.map((lane, idx) => (
-        <div
-          key={lane.id}
-          className="lane-rail"
-          style={{ top: lane.y, height: lane.h, width: RAIL_W }}
-          onClick={(e) => { e.stopPropagation(); onLaneClick(idx); }}
-        >
-          <div className="lane-label">
-            {lane.label.split('\n').map((line, i, arr) => (
-              <span key={i}>{line}{i < arr.length - 1 && <br />}</span>
-            ))}
+      {/* Lane rails (left vertical labels) — pinned horizontally on scroll */}
+      <div className="rail-layer" ref={railLayerRef}>
+        {process.lanes.map((lane, idx) => (
+          <div
+            key={lane.id}
+            className="lane-rail"
+            style={{ top: lane.y, height: lane.h, width: RAIL_W }}
+            onClick={(e) => { e.stopPropagation(); onLaneClick(idx); }}
+          >
+            <div className="lane-label">
+              {lane.label.split('\n').map((line, i, arr) => (
+                <span key={i}>{line}{i < arr.length - 1 && <br />}</span>
+              ))}
+            </div>
           </div>
-        </div>
-      ))}
+        ))}
+      </div>
 
       {/* Lane separator rows */}
       {process.lanes.map((lane) => (

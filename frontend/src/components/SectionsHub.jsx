@@ -65,7 +65,7 @@ export default function SectionsHub({ onPick, onLogout }) {
           <div className="pill-chip">{fmtDate(now)}</div>
         </div>
         <button className="logout-btn" onClick={logout}>
-          <LogOut size={16} /><span>Log out</span>
+          <LogOut size={16} /><span>Çıxış</span>
         </button>
       </div>
 

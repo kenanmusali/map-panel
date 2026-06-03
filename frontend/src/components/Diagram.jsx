@@ -1,7 +1,7 @@
 // Diagram.jsx
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  ChevronLeft, LogOut, Edit3, Eye, Save, Loader2, CheckCircle2, AlertCircle
+  ChevronLeft, LogOut, Edit3, Eye, Save, Loader2, CheckCircle2, AlertCircle, Undo2, Redo2
 } from './icons.jsx';
 import { LogoFull } from './Logo.jsx';
 import { api, setToken } from '../api/client.js';
@@ -75,7 +75,7 @@ function repackLanes(lanes, nodes) {
   return { lanes: newLanes, nodes: newNodes };
 }
 
-export default function Diagram({ processId, onBack, onLogout }) {
+export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
   const role = localStorage.getItem('role');
   const isViewer = role === 'viewer';
 
@@ -97,7 +97,65 @@ export default function Diagram({ processId, onBack, onLogout }) {
   useEffect(() => { processRef.current = process; }, [process]);
   useEffect(() => { dirtyRef.current = dirty; }, [dirty]);
 
+  // ---- Undo / redo history ----
+  const historyRef = useRef([]);   // array of process snapshots
+  const indexRef = useRef(-1);     // pointer into historyRef
+  const lastTagRef = useRef(null); // coalescing tag of last commit
+  const lastTimeRef = useRef(0);   // timestamp of last commit
+  const HISTORY_CAP = 200;
+  const [histMeta, setHistMeta] = useState({ canUndo: false, canRedo: false });
+
+  function syncHistMeta() {
+    setHistMeta({
+      canUndo: indexRef.current > 0,
+      canRedo: indexRef.current < historyRef.current.length - 1
+    });
+  }
+
+  function resetHistory(p) {
+    historyRef.current = p ? [p] : [];
+    indexRef.current = p ? 0 : -1;
+    lastTagRef.current = null;
+    lastTimeRef.current = 0;
+    syncHistMeta();
+  }
+
+  function applySnapshot(p) {
+    setProcess(p);
+    processRef.current = p;
+    setDirty(true);
+  }
+
+  function undo() {
+    if (indexRef.current <= 0) return;
+    indexRef.current -= 1;
+    lastTagRef.current = null;
+    applySnapshot(historyRef.current[indexRef.current]);
+    syncHistMeta();
+  }
+
+  function redo() {
+    if (indexRef.current >= historyRef.current.length - 1) return;
+    indexRef.current += 1;
+    lastTagRef.current = null;
+    applySnapshot(historyRef.current[indexRef.current]);
+    syncHistMeta();
+  }
+
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [processId]);
+
+  // When opened from the list with a focused node, open that node's popup.
+  useEffect(() => {
+    if (!loading && process && focusNodeId != null) {
+      const exists = process.nodes.some(n => String(n.id) === String(focusNodeId));
+      if (exists) {
+        setEditMode(false);
+        setSelection({ kind: 'node', id: focusNodeId });
+        setModalAnchorRect(null);
+      }
+    }
+    /* eslint-disable-next-line */
+  }, [loading, focusNodeId]);
 
   useEffect(() => {
     if (dirty && process) {
@@ -113,6 +171,22 @@ export default function Diagram({ processId, onBack, onLogout }) {
     return () => window.removeEventListener('beforeunload', onBeforeUnload);
   }, []);
 
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (!editMode) return;
+      const mod = e.metaKey || e.ctrlKey;
+      if (!mod) return;
+      const tag = (e.target.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
+      const key = e.key.toLowerCase();
+      if (key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
+      else if ((key === 'z' && e.shiftKey) || key === 'y') { e.preventDefault(); redo(); }
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+    /* eslint-disable-next-line */
+  }, [editMode]);
+
   async function load() {
     setLoading(true);
     setError('');
@@ -126,15 +200,21 @@ export default function Diagram({ processId, onBack, onLogout }) {
         try {
           const draft = JSON.parse(draftStr);
           setProcess(draft);
+          processRef.current = draft;
+          resetHistory(draft);
           setHasDraft(true);
           setDirty(true);
         } catch {
           setProcess(normalized);
+          processRef.current = normalized;
+          resetHistory(normalized);
           setHasDraft(false);
           setDirty(false);
         }
       } else {
         setProcess(normalized);
+        processRef.current = normalized;
+        resetHistory(normalized);
         setHasDraft(false);
         setDirty(false);
       }
@@ -150,13 +230,51 @@ export default function Diagram({ processId, onBack, onLogout }) {
   function discardDraft() {
     localStorage.removeItem(DRAFT_KEY(processId));
     setProcess(serverProcess);
+    processRef.current = serverProcess;
+    resetHistory(serverProcess);
     setHasDraft(false);
     setDirty(false);
     setSelection(null);
   }
 
-  function updateProcess(updater) {
-    setProcess(prev => typeof updater === 'function' ? updater(prev) : updater);
+  /**
+   * Commit a change as an undo checkpoint.
+   * Pass an optional `tag` so rapid edits to the same field (typing) coalesce
+   * into a single history entry instead of one-per-keystroke.
+   */
+  function updateProcess(updater, tag) {
+    const prev = processRef.current;
+    const next = typeof updater === 'function' ? updater(prev) : updater;
+    if (next === prev) return;
+
+    const now = Date.now();
+    const coalesce = tag && tag === lastTagRef.current && (now - lastTimeRef.current) < 800
+      && historyRef.current.length > 1;
+
+    let hist = historyRef.current.slice(0, indexRef.current + 1);
+    if (coalesce) {
+      hist[hist.length - 1] = next;        // replace top — merge with previous edit
+    } else {
+      hist.push(next);
+      while (hist.length > HISTORY_CAP) hist.shift();
+    }
+    historyRef.current = hist;
+    indexRef.current = hist.length - 1;
+    lastTagRef.current = tag || null;
+    lastTimeRef.current = now;
+
+    setProcess(next);
+    processRef.current = next;
+    setDirty(true);
+    syncHistMeta();
+  }
+
+  /** Live update with no history checkpoint (used during drag). */
+  function updateProcessLive(updater) {
+    const prev = processRef.current;
+    const next = typeof updater === 'function' ? updater(prev) : updater;
+    setProcess(next);
+    processRef.current = next;
     setDirty(true);
   }
 
@@ -211,7 +329,7 @@ export default function Diagram({ processId, onBack, onLogout }) {
    * Does NOT repack — that runs once on drag end for smoother dragging.
    */
   const onNodeMove = useCallback((nodeId, x, y) => {
-    updateProcess(p => {
+    updateProcessLive(p => {
       const node = p.nodes.find(n => n.id === nodeId);
       if (!node) return p;
 
@@ -256,6 +374,23 @@ export default function Diagram({ processId, onBack, onLogout }) {
     });
   }, []);
 
+  /**
+   * Create an edge by dragging from one node's side handle to another node.
+   * Avoids duplicate edges between the same pair/sides.
+   */
+  const onCreateEdge = useCallback((fromId, fromSide, toId, toSide) => {
+    updateProcess(p => {
+      const exists = p.edges.some(e =>
+        String(e.from) === String(fromId) &&
+        String(e.to) === String(toId) &&
+        (e.s || 'bottom') === fromSide &&
+        (e.e || 'top') === toSide
+      );
+      if (exists) return p;
+      return { ...p, edges: [...p.edges, { from: fromId, to: toId, s: fromSide, e: toSide }] };
+    });
+  }, []);
+
   const showModal = !editMode && selection?.kind === 'node' && process;
 
   return (
@@ -271,6 +406,27 @@ export default function Diagram({ processId, onBack, onLogout }) {
         <LogoFull />
 
         <div className="top-right">
+          {!isViewer && editMode && (
+            <div className="history-group">
+              <button
+                className="hist-btn"
+                onClick={undo}
+                disabled={!histMeta.canUndo}
+                title="Geri al (Ctrl+Z)"
+              >
+                <Undo2 size={16} />
+              </button>
+              <button
+                className="hist-btn"
+                onClick={redo}
+                disabled={!histMeta.canRedo}
+                title="İrəli al (Ctrl+Shift+Z)"
+              >
+                <Redo2 size={16} />
+              </button>
+            </div>
+          )}
+
           {!isViewer && editMode && (
             <button
               className={`pill-chip save-chip ${dirty ? 'dirty' : ''}`}
@@ -295,7 +451,7 @@ export default function Diagram({ processId, onBack, onLogout }) {
           )}
 
           <button className="logout-btn" onClick={logout}>
-            <LogOut size={16} /><span>Log out</span>
+            <LogOut size={16} /><span>Çıxış</span>
           </button>
         </div>
       </div>
@@ -330,6 +486,7 @@ export default function Diagram({ processId, onBack, onLogout }) {
                 onLaneClick={onLaneClick}
                 onNodeMove={onNodeMove}
                 onNodeMoveEnd={onNodeMoveEnd}
+                onCreateEdge={onCreateEdge}
               />
             )}
           </div>

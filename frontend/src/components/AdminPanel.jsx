@@ -1,6 +1,6 @@
 // AdminPanel.jsx - Fixed with auto-height on drag
 import { useState, useRef } from 'react';
-import { Plus, Trash2, Pill, Square, SquareDashed, GripVertical, Eye, Archive } from './icons.jsx';
+import { Plus, Trash2, Pill, Square, SquareDashed, Diamond, BoxSelect, GripVertical, Eye, Archive } from './icons.jsx';
 
 export default function AdminPanel({ process, selection, setSelection, updateProcess }) {
   return (
@@ -98,7 +98,7 @@ function PanelsSection({ process, selection, setSelection, updateProcess }) {
     updateProcess(prev => ({
       ...prev,
       lanes: prev.lanes.map(l => l.id === id ? { ...l, label: value } : l)
-    }));
+    }), `rename-${id}`);
   }
 
   function onDragStart(e, idx) {
@@ -256,9 +256,16 @@ function NodesSection({ process, setSelection, updateProcess }) {
       y = maxBottom + 20;
     }
     
+    const labelByType = {
+      pill: 'başlanğıc/son',
+      rect: 'addım',
+      stroke: 'alt-addım',
+      diamond: 'qərar',
+      dashed: 'alt-addım (kəsik)'
+    };
     const node = {
       id, type, x: lane.y + 80, y, laneId: lane.id, ...defaults,
-      text: `Yeni ${type === 'pill' ? 'başlanğıc/son' : type === 'rect' ? 'addım' : 'alt-addım'}`,
+      text: `Yeni ${labelByType[type] || 'addım'}`,
       info: { general: [''], risks: [''] }
     };
     
@@ -295,6 +302,14 @@ function NodesSection({ process, setSelection, updateProcess }) {
           <div className="type-preview stroke"><SquareDashed size={14} /></div>
           <span>Stroke</span><small>Alt-addım</small>
         </button>
+        <button className="type-btn" onClick={() => addNode('diamond')}>
+          <div className="type-preview diamond"><Diamond size={14} /></div>
+          <span>Romb</span><small>Qərar (4 ox)</small>
+        </button>
+        <button className="type-btn" onClick={() => addNode('dashed')}>
+          <div className="type-preview dashed"><BoxSelect size={14} /></div>
+          <span>Kəsik</span><small>Kəsik sərhəd</small>
+        </button>
       </div>
     </section>
   );
@@ -305,6 +320,8 @@ function nodeDefaults(type) {
     case 'pill': return { w: 200, h: 50 };
     case 'rect': return { w: 200, h: 70 };
     case 'stroke': return { w: 220, h: 60 };
+    case 'diamond': return { w: 150, h: 150 };
+    case 'dashed': return { w: 220, h: 60 };
     default: return { w: 200, h: 70 };
   }
 }
@@ -352,7 +369,7 @@ function LaneEditor({ lane, laneIndex, process, updateProcess, onDelete }) {
       const newLanes = p.lanes.map((l, i) => i === laneIndex ? { ...l, [field]: value } : l);
       const repacked = repackLanes(newLanes, p.nodes);
       return { ...p, lanes: repacked };
-    });
+    }, `lane-${laneIndex}-${field}`);
   }
 
   function recalcHeight() {
@@ -412,7 +429,7 @@ function NodeEditor({ node, process, updateProcess, onDelete }) {
       const newNodes = p.nodes.map(n => String(n.id) === String(node.id) ? { ...n, [field]: value } : n);
       const repacked = repackLanes(p.lanes, newNodes);
       return { ...p, nodes: newNodes, lanes: repacked };
-    });
+    }, `node-${node.id}-${field}`);
   }
 
   function patchInfo(field, value) {
@@ -464,6 +481,8 @@ function NodeEditor({ node, process, updateProcess, onDelete }) {
             <option value="pill">Pill</option>
             <option value="rect">Rect</option>
             <option value="stroke">Stroke</option>
+            <option value="diamond">Romb</option>
+            <option value="dashed">Kəsik</option>
           </select>
         </div>
       </div>

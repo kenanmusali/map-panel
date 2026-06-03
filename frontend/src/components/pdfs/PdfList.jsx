@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { LogoFull } from '../Logo.jsx';
-import { ChevronLeft, LogOut, Plus, Loader2, Trash2, Eye, Edit3 } from '../icons.jsx';
+import { ChevronLeft, LogOut, Plus, Loader2, Trash2, Eye, Edit3, Search } from '../icons.jsx';
 import { setToken } from '../../api/client.js';
 import { pdfsApi } from '../../api/pdfsClient.js';
 import PdfFormModal from './PdfFormModal.jsx';
@@ -37,6 +37,7 @@ function DownloadIcon({ size = 16 }) {
 export default function PdfList({ onBack, onLogout }) {
   const [now, setNow] = useState(new Date());
   const [pdfs, setPdfs] = useState([]);
+  const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(null); // id of row currently being downloaded/viewed
@@ -125,13 +126,23 @@ export default function PdfList({ onBack, onLogout }) {
           <div className="pill-chip">{fmtDate(now)}</div>
         </div>
         <button className="logout-btn" onClick={logout}>
-          <LogOut size={16} /><span>Log out</span>
+          <LogOut size={16} /><span>Çıxış</span>
         </button>
       </div>
 
       <div className="home-wrap">
         <LogoFull size="large" />
         <h2 className="home-title">PDF SƏNƏDLƏR</h2>
+
+        <div className="search-wrap">
+          <span className="search-icon"><Search size={18} /></span>
+          <input
+            type="text"
+            placeholder="Ad və ya nömrə ilə axtar"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+          />
+        </div>
 
         <div className="process-list">
           {loading && <div className="empty-state"><Loader2 size={20} className="spin" />Yüklənir...</div>}
@@ -140,7 +151,15 @@ export default function PdfList({ onBack, onLogout }) {
             <div className="empty-state">Heç bir PDF yoxdur</div>
           )}
 
-          {!loading && pdfs.map((p, idx) => (
+          {(() => {
+            const q = query.trim().toLowerCase();
+            const shown = pdfs
+              .map((p, idx) => ({ p, idx }))
+              .filter(({ p, idx }) => !q || (p.title || '').toLowerCase().includes(q) || String(idx + 1).includes(q));
+            if (!loading && !error && pdfs.length > 0 && shown.length === 0) {
+              return <div className="empty-state">Heç bir nəticə tapılmadı</div>;
+            }
+            return !loading && shown.map(({ p, idx }) => (
             <div key={p.id} className="process-item pdf-item">
               <div className="num">{idx + 1}</div>
               <div className="label">
@@ -188,7 +207,8 @@ export default function PdfList({ onBack, onLogout }) {
                 )}
               </div>
             </div>
-          ))}
+          ));
+          })()}
 
           {isAdmin && !loading && (
             <button className="process-item create-btn" onClick={() => setModal({ mode: 'create' })}>

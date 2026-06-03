@@ -10,6 +10,8 @@ const MIN_H = 300;
 const CORNER_R = 10;          // path corner radius
 const DRAG_THRESHOLD = 3;     // px before a mousedown counts as a drag
 
+const SIDES = ['top', 'right', 'bottom', 'left'];
+
 export default function DiagramCanvas({
   process,
   selectedNodeId,
@@ -18,10 +20,14 @@ export default function DiagramCanvas({
   onNodeClick,
   onLaneClick,
   onNodeMove,
-  onNodeMoveEnd
+  onNodeMoveEnd,
+  onCreateEdge
 }) {
   const canvasRef = useRef(null);
   const [drag, setDrag] = useState(null);
+  const [hoverNodeId, setHoverNodeId] = useState(null);
+  const [link, setLink] = useState(null);   // { fromId, fromSide, from:{x,y}, cur:{x,y}, overId }
+  const didLinkRef = useRef(false);
 
   // ---- Canvas auto-fit to content ----
   const { canvasW, canvasH } = useMemo(() => {
@@ -39,7 +45,13 @@ export default function DiagramCanvas({
     };
   }, [process.nodes, process.lanes]);
 
-  // ---- Drag handlers ----
+  // Convert a mouse event into canvas-local coordinates
+  function toCanvasPoint(e) {
+    const rect = canvasRef.current.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }
+
+  // ---- Node drag handlers ----
   function onMouseDownNode(e, node) {
     if (!editMode) return;
     e.preventDefault();
@@ -54,7 +66,20 @@ export default function DiagramCanvas({
     });
   }
 
+  // ---- Link (drag-to-connect) handlers ----
+  function onHandleMouseDown(e, node, side) {
+    if (!editMode) return;
+    e.preventDefault();
+    e.stopPropagation();           // don't start a node drag
+    const from = anchor(node, side);
+    setLink({ fromId: node.id, fromSide: side, from, cur: from, overId: null });
+  }
+
   function onMouseMove(e) {
+    if (link) {
+      setLink(prev => prev ? { ...prev, cur: toCanvasPoint(e) } : prev);
+      return;
+    }
     if (!drag) return;
     const dx = e.clientX - drag.startX;
     const dy = e.clientY - drag.startY;
@@ -71,7 +96,19 @@ export default function DiagramCanvas({
     onNodeMove(drag.nodeId, nx, ny);
   }
 
+  function finishLink(targetNode) {
+    if (!link) return;
+    if (targetNode && String(targetNode.id) !== String(link.fromId) && onCreateEdge) {
+      const toSide = nearestSide(targetNode, link.cur);
+      onCreateEdge(link.fromId, link.fromSide, targetNode.id, toSide);
+      didLinkRef.current = true;
+      setTimeout(() => { didLinkRef.current = false; }, 0);
+    }
+    setLink(null);
+  }
+
   function endDrag() {
+    if (link) { setLink(null); return; }   // released on empty canvas → cancel
     if (!drag) return;
     if (drag.moved && onNodeMoveEnd) onNodeMoveEnd(drag.nodeId);
     setDrag(null);
@@ -82,7 +119,7 @@ export default function DiagramCanvas({
   return (
     <div
       ref={canvasRef}
-      className="diagram-canvas"
+      className={`diagram-canvas ${link ? 'linking' : ''}`}
       style={{ width: canvasW, height: canvasH }}
       onMouseMove={onMouseMove}
       onMouseUp={endDrag}
@@ -116,12 +153,37 @@ export default function DiagramCanvas({
       {/* SVG edges */}
       <Edges process={process} width={canvasW} height={canvasH} />
 
+      {/* Temp link preview while dragging a connection */}
+      {link && (
+        <svg
+          className="link-preview"
+          width={canvasW}
+          height={canvasH}
+          style={{ pointerEvents: 'none', position: 'absolute', top: 0, left: 0, overflow: 'visible', zIndex: 9 }}
+        >
+          <defs>
+            <marker id="arrow-link" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+              <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--primary)" />
+            </marker>
+          </defs>
+          <line
+            x1={link.from.x} y1={link.from.y}
+            x2={link.cur.x} y2={link.cur.y}
+            stroke="var(--primary)" strokeWidth="2"
+            strokeDasharray="5 5" strokeLinecap="round"
+            markerEnd="url(#arrow-link)"
+          />
+        </svg>
+      )}
+
       {/* Nodes */}
       {process.nodes.map((node) => {
         const isSelected =
           String(modalNodeId) === String(node.id) ||
           String(selectedNodeId) === String(node.id);
         const dimmed = modalOpen && !isSelected;
+        const isLinkTarget = link && String(link.overId) === String(node.id) && String(link.fromId) !== String(node.id);
+        const showHandles = editMode && !drag && (String(hoverNodeId) === String(node.id) || (link && String(link.fromId) === String(node.id)));
 
         const cls = [
           'node',
@@ -129,7 +191,8 @@ export default function DiagramCanvas({
           isSelected ? 'selected' : '',
           dimmed ? 'dimmed' : '',
           editMode ? 'editable' : '',
-          drag?.nodeId === node.id ? 'dragging' : ''
+          drag?.nodeId === node.id ? 'dragging' : '',
+          isLinkTarget ? 'link-target' : ''
         ].filter(Boolean).join(' ');
 
         return (
@@ -138,20 +201,58 @@ export default function DiagramCanvas({
             className={cls}
             style={{ left: node.x, top: node.y, width: node.w, minHeight: node.h }}
             onMouseDown={(e) => onMouseDownNode(e, node)}
+            onMouseEnter={() => {
+              setHoverNodeId(node.id);
+              if (link) setLink(prev => prev ? { ...prev, overId: node.id } : prev);
+            }}
+            onMouseLeave={() => {
+              setHoverNodeId(prev => (String(prev) === String(node.id) ? null : prev));
+              if (link) setLink(prev => (prev && String(prev.overId) === String(node.id) ? { ...prev, overId: null } : prev));
+            }}
+            onMouseUp={(e) => {
+              if (link) { e.stopPropagation(); finishLink(node); }
+            }}
             onClick={(e) => {
               e.stopPropagation();
-              if (drag?.moved) return; // ignore click after drag
+              if (drag?.moved) return;   // ignore click after drag
+              if (didLinkRef.current) return; // ignore click right after linking
               const rect = e.currentTarget.getBoundingClientRect();
               onNodeClick(node.id, rect);
             }}
           >
             <div className="num">{node.id}</div>
             <div className="text">{node.text}</div>
+
+            {showHandles && SIDES.map(side => (
+              <div
+                key={side}
+                className={`link-handle ${side} ${node.type === 'diamond' ? 'on-diamond' : ''}`}
+                title="Ox çəkmək üçün sürükləyin"
+                onMouseDown={(e) => onHandleMouseDown(e, node, side)}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <span className="link-dot" />
+              </div>
+            ))}
           </div>
         );
       })}
     </div>
   );
+}
+
+/* Choose which side of the target the arrow enters, based on where the
+   pointer was released relative to the target's box (predictable / Figma-like). */
+function nearestSide(node, pt) {
+  const dTop = Math.abs(pt.y - node.y);
+  const dBottom = Math.abs(pt.y - (node.y + node.h));
+  const dLeft = Math.abs(pt.x - node.x);
+  const dRight = Math.abs(pt.x - (node.x + node.w));
+  const min = Math.min(dTop, dBottom, dLeft, dRight);
+  if (min === dTop) return 'top';
+  if (min === dBottom) return 'bottom';
+  if (min === dLeft) return 'left';
+  return 'right';
 }
 
 /* ====== SVG EDGES ====== */
@@ -166,11 +267,11 @@ function Edges({ process, width, height }) {
       style={{ pointerEvents: 'none', position: 'absolute', top: 0, left: 0, overflow: 'visible' }}
     >
       <defs>
-        <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="var(--primary)" />
+        <marker id="arrow" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0.5 1 L 9 5 L 0.5 9 Z" fill="var(--primary)" />
         </marker>
-        <marker id="arrow-d" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
-          <path d="M 0 0 L 10 5 L 0 10 z" fill="#7ba0b3" />
+        <marker id="arrow-d" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="6.5" markerHeight="6.5" orient="auto-start-reverse">
+          <path d="M 0.5 1 L 9 5 L 0.5 9 Z" fill="#7ba0b3" />
         </marker>
       </defs>
       {process.edges.map((e, i) => {
@@ -186,6 +287,7 @@ function Edges({ process, width, height }) {
             strokeWidth="2"
             fill="none"
             strokeLinecap="round"
+            strokeLinejoin="round"
             strokeDasharray={e.dashed ? '5 5' : null}
             markerEnd={`url(#arrow${e.dashed ? '-d' : ''})`}
           />

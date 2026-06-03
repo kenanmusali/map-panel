@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { LogoFull } from './Logo.jsx';
-import { Search, LogOut, Plus, Loader2, Trash2, Archive, ChevronLeft } from './icons.jsx';
+import { Search, LogOut, Plus, Loader2, Trash2, Archive, ChevronLeft, ChevronRight, ChevronDown } from './icons.jsx';
 import { api, setToken } from '../api/client.js';
 
 function fmtTime(d) {
@@ -25,6 +25,11 @@ export default function Home({ onOpen, onLogout, onBack }) {
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
   const [showArchived, setShowArchived] = useState(false);
+
+  // Per-process expand state for the nested node list
+  const [expanded, setExpanded] = useState({});       // id -> bool
+  const [details, setDetails] = useState({});         // id -> nodes[]
+  const [detailLoading, setDetailLoading] = useState({}); // id -> bool
 
   const role = localStorage.getItem('role');
   const isViewer = role === 'viewer';
@@ -65,6 +70,24 @@ export default function Home({ onOpen, onLogout, onBack }) {
       alert('Xəta: ' + e.message);
     } finally {
       setCreating(false);
+    }
+  }
+
+  async function toggleExpand(e, p) {
+    e.stopPropagation();
+    const id = p.id || p._id;
+    const isOpen = !!expanded[id];
+    setExpanded(prev => ({ ...prev, [id]: !isOpen }));
+    if (!isOpen && !details[id]) {
+      setDetailLoading(prev => ({ ...prev, [id]: true }));
+      try {
+        const full = await api.getProcess(id);
+        setDetails(prev => ({ ...prev, [id]: full.nodes || [] }));
+      } catch (err) {
+        setDetails(prev => ({ ...prev, [id]: [] }));
+      } finally {
+        setDetailLoading(prev => ({ ...prev, [id]: false }));
+      }
     }
   }
 
@@ -113,7 +136,7 @@ export default function Home({ onOpen, onLogout, onBack }) {
           <div className="pill-chip">{fmtDate(now)}</div>
         </div>
         <button className="logout-btn" onClick={logout}>
-          <LogOut size={16} /><span>Log out</span>
+          <LogOut size={16} /><span>Çıxış</span>
         </button>
       </div>
 
@@ -127,7 +150,7 @@ export default function Home({ onOpen, onLogout, onBack }) {
           <span className="search-icon"><Search size={18} /></span>
           <input
             type="text"
-            placeholder="Search by name or number badge"
+            placeholder="Ad və ya nömrə ilə axtar"
             value={query}
             onChange={e => setQuery(e.target.value)}
           />
@@ -140,22 +163,59 @@ export default function Home({ onOpen, onLogout, onBack }) {
             <div className="empty-state">Heç bir nəticə tapılmadı</div>
           )}
 
-          {!loading && active.map(p => (
-            <div key={p.id || p._id} className="process-item" onClick={() => onOpen(p.id || p._id)}>
-              <div className="num">{p.id || p._id}</div>
-              <div className="label">{p.title}</div>
-              {!isViewer && (
-                <button
-                  className="delete-archive-btn"
-                  title="Sil"
-                  style={{ marginLeft: 'auto' }}
-                  onClick={(e) => deleteProcess(e, p)}
-                >
-                  <Trash2 size={16} />
-                </button>
-              )}
-            </div>
-          ))}
+          {!loading && active.map(p => {
+            const pid = p.id || p._id;
+            const isOpen = !!expanded[pid];
+            const nodes = details[pid] || [];
+            const isDetailLoading = !!detailLoading[pid];
+            return (
+              <div key={pid} className={`process-group ${isOpen ? 'open' : ''}`}>
+                <div className="process-item" onClick={() => onOpen(pid)}>
+                  <button
+                    className={`chevron-btn ${isOpen ? 'open' : ''}`}
+                    title={isOpen ? 'Bağla' : 'Addımları göstər'}
+                    onClick={(e) => toggleExpand(e, p)}
+                  >
+                    {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                  </button>
+                  <div className="num">{pid}</div>
+                  <div className="label">{p.title}</div>
+                  {!isViewer && (
+                    <button
+                      className="delete-archive-btn"
+                      title="Sil"
+                      style={{ marginLeft: 'auto' }}
+                      onClick={(e) => deleteProcess(e, p)}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                  )}
+                </div>
+
+                {isOpen && (
+                  <div className="process-children">
+                    {isDetailLoading && (
+                      <div className="child-empty"><Loader2 size={14} className="spin" /> Yüklənir...</div>
+                    )}
+                    {!isDetailLoading && nodes.length === 0 && (
+                      <div className="child-empty">Bu prosesdə addım yoxdur.</div>
+                    )}
+                    {!isDetailLoading && nodes.map(n => (
+                      <button
+                        key={n.id}
+                        className="child-item"
+                        title="Açmaq üçün klikləyin"
+                        onClick={(e) => { e.stopPropagation(); onOpen(pid, n.id); }}
+                      >
+                        <span className={`child-badge ${n.type || 'rect'}`}>{n.id}</span>
+                        <span className="child-label">{n.text || '(adsız)'}</span>
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
 
      {!isViewer && !loading && archived.length > 0 && (
   <>

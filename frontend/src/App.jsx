@@ -12,6 +12,7 @@ export default function App() {
   const [view, setView] = useState('login');
   const [user, setUser] = useState(null);
   const [processId, setProcessId] = useState(null);
+  const [focusNodeId, setFocusNodeId] = useState(null);
   const [bootChecking, setBootChecking] = useState(true);
 
   useEffect(() => {
@@ -59,18 +60,21 @@ export default function App() {
     else if (key === 'pdfs') setView('pdfs');
   }
 
-  function openProcess(id) {
+  function openProcess(id, nodeId = null) {
     setProcessId(id);
+    setFocusNodeId(nodeId);
     setView('diagram');
   }
 
   function backToDiagrams() {
     setProcessId(null);
+    setFocusNodeId(null);
     setView('diagrams');
   }
 
   function backToHub() {
     setProcessId(null);
+    setFocusNodeId(null);
     setView('hub');
   }
 
@@ -98,6 +102,7 @@ export default function App() {
     return (
       <Diagram
         processId={processId}
+        focusNodeId={focusNodeId}
         onBack={backToDiagrams}
         onLogout={onLogout}
         user={user}

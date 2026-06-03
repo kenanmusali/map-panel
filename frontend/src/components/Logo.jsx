@@ -1,3 +1,5 @@
+import LogoSvg from './header-logo.svg';
+
 export function LogoMark({ size = 44 }) {
   return (
     <div className="logo-mark" style={{ width: size, height: size }} aria-hidden />
@@ -5,15 +7,14 @@ export function LogoMark({ size = 44 }) {
 }
 
 export function LogoFull({ size = 'normal' }) {
-  const cls = size === 'large' ? 'logo-text large' : 'logo-text';
   return (
     <div className="logo-row">
-      <LogoMark size={size === 'large' ? 68 : 44} />
-      <div className={cls}>
-        <span className="a">ABŞERON</span>
-        <span className="b">LOGİSTİKA MƏRKƏZİ</span>
-        <span className="c">ONE SOURCE • MULTIPLE SERVICE</span>
-      </div>
+      <img 
+        src={LogoSvg} 
+        alt="Abşeron Logistika Mərkəzi" 
+        className="logo-full"
+        style={{ maxWidth: size === 'large' ? '400px' : '280px' }}
+      />
     </div>
   );
 }

@@ -399,6 +399,7 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.02em; }
   background: var(--primary);
   color: #fff; border-radius: var(--r-sm) 0 0 var(--r-sm);
   display: flex; align-items: center; justify-content: center; cursor: default;
+  border: 2px solid white;
 }
 .diagram-wrap.edit-mode .lane-rail { cursor: pointer; }
 .diagram-wrap.edit-mode .lane-rail:hover { background: var(--primary-hover); }

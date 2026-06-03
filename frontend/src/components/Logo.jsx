@@ -13,7 +13,7 @@ export function LogoFull({ size = 'normal' }) {
         src={LogoSvg} 
         alt="Abşeron Logistika Mərkəzi" 
         className="logo-full"
-        style={{ maxWidth: size === 'large' ? '400px' : '280px' }}
+        style={{ maxWidth: size === 'large' ? '500px' : '280px' }}
       />
     </div>
   );

@@ -143,7 +143,7 @@ export default function Home({ onOpen, onLogout, onBack }) {
       <div className="home-wrap">
         <LogoFull size="large" />
         <h2 className="home-title">
-          ABŞERON LOGİSTİKA MƏRKƏZİ<br />PROSES XƏRİTƏLƏRİ
+          ABŞERON LOGİSTİKA MƏRKƏZİ<br />Iş Axışları
         </h2>
 
         <div className="search-wrap">

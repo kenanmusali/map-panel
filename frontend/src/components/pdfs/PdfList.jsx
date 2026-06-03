@@ -132,7 +132,7 @@ export default function PdfList({ onBack, onLogout }) {
 
       <div className="home-wrap">
         <LogoFull size="large" />
-        <h2 className="home-title">PDF SƏNƏDLƏR</h2>
+        <h2 className="home-title">Normativ Sənədlər</h2>
 
         <div className="search-wrap">
           <span className="search-icon"><Search size={18} /></span>

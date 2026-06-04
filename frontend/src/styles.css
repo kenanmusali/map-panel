@@ -852,7 +852,7 @@ details[open] summary::before { transform: rotate(90deg); }
 .pdf-field select:focus { outline: none; border-color: var(--primary); box-shadow: var(--ring); }
 
 /* ===================== View: fit-to-width ===================== */
-.diagram-container.fit { overflow-x: hidden; overflow-y: auto; }
+.diagram-container.fit { overflow: hidden; }
 .canvas-scale { transform-origin: top left; }
 
 /* ===================== Side panel bar + close ===================== */

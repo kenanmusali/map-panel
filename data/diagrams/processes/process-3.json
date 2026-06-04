@@ -4,78 +4,555 @@
   "width": 1880,
   "height": 1340,
   "lanes": [
-    { "id": "lane-1", "label": "ADY", "y": 20, "h": 130 },
-    { "id": "lane-2", "label": "Manevra və\nplanlama ofisi", "y": 150, "h": 220 },
-    { "id": "lane-3", "label": "Vahid Pəncərə\ndepartamenti", "y": 370, "h": 240 },
-    { "id": "lane-4", "label": "Müştəri", "y": 610, "h": 150 },
-    { "id": "lane-5", "label": "Sahə əməliyyatları ofisinin\nYük əməliyyatları şöbəsi /\nDigər aidiyyəti şöbələr", "y": 760, "h": 320 },
-    { "id": "lane-6", "label": "DGK", "y": 1080, "h": 120 },
-    { "id": "lane-7", "label": "TIR park və\nMAD şöbəsi", "y": 1200, "h": 130 }
+    {
+      "id": "lane-1",
+      "label": "ADY",
+      "y": 20,
+      "h": 130
+    },
+    {
+      "id": "lane-2",
+      "label": "Manevra və\nplanlama ofisi",
+      "y": 150,
+      "h": 220
+    },
+    {
+      "id": "lane-3",
+      "label": "Vahid Pəncərə\ndepartamenti",
+      "y": 370,
+      "h": 240
+    },
+    {
+      "id": "lane-4",
+      "label": "Müştəri",
+      "y": 610,
+      "h": 150
+    },
+    {
+      "id": "lane-5",
+      "label": "Sahə əməliyyatları ofisinin\nYük əməliyyatları şöbəsi /\nDigər aidiyyəti şöbələr",
+      "y": 760,
+      "h": 320
+    },
+    {
+      "id": "lane-6",
+      "label": "DGK",
+      "y": 1080,
+      "h": 120
+    },
+    {
+      "id": "lane-7",
+      "label": "TIR park və\nMAD şöbəsi",
+      "y": 1200,
+      "h": 130
+    }
   ],
   "nodes": [
-    { "id": 1, "type": "pill", "x": 90, "y": 50, "w": 220, "h": 90, "text": "Qatarın Abşeron yük dəmiryolu stansiyasından Mərkəzin qəbulgöndərmə parkına gətirilməsi" },
-    { "id": 2, "type": "rect", "x": 90, "y": 180, "w": 220, "h": 90, "text": "Yükə dair sənədlərin qəbulu və hərəkət tərkibinin tormoz başmaqları ilə bərkidilməsi" },
-    { "id": 3, "type": "rect", "x": 360, "y": 180, "w": 200, "h": 70, "text": "Natura vərəqəsinin tərtib edilməsi" },
-    { "id": 4, "type": "rect", "x": 600, "y": 180, "w": 240, "h": 90, "text": "Kommersiya baxışının təşkil edilməsi və zəruri hallarda uyğunsuzluqların qeydiyyatının aparılması" },
-    { "id": 5, "type": "rect", "x": 90, "y": 290, "w": 220, "h": 70, "text": "Sənədlərin VPD-yə təhvil verilməsi" },
-    { "id": "5.1", "type": "stroke", "x": 360, "y": 290, "w": 260, "h": 80, "text": "\"UDPAS\" proqramında vaqonlara dair müvafiq məlumatların daxil edilməsi" },
-    { "id": "5.2", "type": "stroke", "x": 660, "y": 290, "w": 260, "h": 80, "text": "Vaqonların aidiyyəti üzrə Mərkəzin terminal yollarına yerləşdirilməsi" },
-    { "id": "5.3", "type": "stroke", "x": 960, "y": 290, "w": 260, "h": 80, "text": "Hərəkət tərkibinin tormoz başmaqların quraşdırılması" },
-    { "id": 6, "type": "rect", "x": 90, "y": 400, "w": 220, "h": 80, "text": "Yükə dair sənədlərin qəbulu və çeşidlənməsi" },
-    { "id": 7, "type": "rect", "x": 360, "y": 400, "w": 240, "h": 80, "text": "Sənədlərin emalı və müvafiq məlumatların \"UDPAS\" proqramına əlavə edilməsi" },
-    { "id": "7.1", "type": "stroke", "x": 660, "y": 400, "w": 260, "h": 80, "text": "SMGS yük nəqliyyat qaiməsinin 1-ci və 2-ci nüsxələrinin möhürlənməsi" },
-    { "id": "7.2", "type": "stroke", "x": 960, "y": 400, "w": 260, "h": 80, "text": "SMGS yük nəqliyyat qaiməsinin 2-ci və 3-cü nüsxələrinin ADY-yə təhvil verilməsi" },
-    { "id": 8, "type": "rect", "x": 90, "y": 510, "w": 240, "h": 80, "text": "Müştəri ilə əlaqə yaradılması və yükün Mərkəzə çatması barədə məlumat verilməsi" },
-    { "id": 9, "type": "rect", "x": 360, "y": 510, "w": 240, "h": 80, "text": "Yükə dair sənədləri gömrük rəsmiləşdirilməsi məqsədilə müştəriyə təqdim edilməsi" },
-    { "id": 11, "type": "rect", "x": 660, "y": 510, "w": 240, "h": 80, "text": "Cəmiyyət tərəfindən göstəriləcək xidmətlərə dair sifariş sənədinin hazırlanması" },
-    { "id": 13, "type": "rect", "x": 960, "y": 510, "w": 240, "h": 80, "text": "Ödənişin qəbul edilməsi və müştərinin yükaşırma sahəsinə yönləndirilməsi" },
-    { "id": 10, "type": "rect", "x": 360, "y": 640, "w": 240, "h": 80, "text": "Yükə dair sənədləri gömrük rəsmiləşdirilməsi məqsədilə müştəriyə təqdim edilməsi" },
-    { "id": 12, "type": "rect", "x": 660, "y": 640, "w": 240, "h": 70, "text": "Ödənişin həyata keçirilməsi" },
-    { "id": 14, "type": "rect", "x": 960, "y": 640, "w": 240, "h": 70, "text": "Müvafiq yükaşırma sahəsinə yaxınlaşması" },
-    { "id": 15, "type": "rect", "x": 90, "y": 790, "w": 240, "h": 130, "text": "Sənədlərin yoxlanılması və Cəmiyyət tərəfindən göstərilən xidmətlərə dair terminal rüsumların tam şəkildə ödənilməsinin nəzərdən keçirilməsi" },
-    { "id": 18, "type": "rect", "x": 380, "y": 790, "w": 240, "h": 90, "text": "Yükün aşırılması üçün zəruri işçi qüvvəsi və texniki resursların cəlb edilməsi" },
-    { "id": 19, "type": "rect", "x": 660, "y": 790, "w": 240, "h": 90, "text": "Yükaşırma əməliyyatının icra edilməsi (yüklərin vaqondan boşaldılaraq yük avtomobilinə yüklənməsi)" },
-    { "id": "5.3.1", "type": "stroke", "x": 1280, "y": 790, "w": 260, "h": 90, "text": "Vaqona vizual baxışın keçirilməsi" },
-    { "id": 16, "type": "rect", "x": 90, "y": 940, "w": 240, "h": 130, "text": "Mərkəzin TIR parkında olan əvvəlcədən qeydiyyatda olan müştərinin nəqliyyat vasitəsinə \"UDPAS\" proqramı üzərindən çağırış verilməsi" },
-    { "id": 17, "type": "rect", "x": 380, "y": 940, "w": 240, "h": 90, "text": "DGK əməkdaşları ilə birgə vaqona baxışın keçirilməsi və yükün açılması" },
-    { "id": 20, "type": "rect", "x": 660, "y": 940, "w": 240, "h": 110, "text": "Yükaşırma əməliyyatı başa çatdıqdan sonra \"UDPAS\" proqramı üzərindən yük avtomobilinin Mərkəzdən çıxışına dair buraxılışın verilməsi" },
-    { "id": "20.1", "type": "stroke", "x": 960, "y": 940, "w": 260, "h": 80, "text": "Vaqona vizual baxışın keçirilməsi" },
-    { "id": "20.2", "type": "stroke", "x": 960, "y": 1030, "w": 260, "h": 90, "text": "Yükaşırma əməliyyatının başa çatmasına dair \"UDPAS\" proqramında qeydiyyatın aparılması" },
-    { "id": "16.1", "type": "stroke", "x": 90, "y": 1110, "w": 260, "h": 70, "text": "Yük avtomobilinin Mərkəzə daxil olmasının təmin edilməsi" },
-    { "id": "17.1", "type": "stroke", "x": 480, "y": 1110, "w": 260, "h": 70, "text": "Vaqona baxışın keçirilməsi və yükün açılması" },
-    { "id": 21, "type": "pill", "x": 880, "y": 1230, "w": 280, "h": 90, "text": "Yük avtomobilinin Mərkəzdən çıxışının təmin edilməsi" }
+    {
+      "id": 1,
+      "type": "pill",
+      "x": 90,
+      "y": 50,
+      "w": 220,
+      "h": 90,
+      "text": "Qatarın Abşeron yük dəmiryolu stansiyasından Mərkəzin qəbulgöndərmə parkına gətirilməsi"
+    },
+    {
+      "id": 2,
+      "type": "rect",
+      "x": 90,
+      "y": 180,
+      "w": 220,
+      "h": 90,
+      "text": "Yükə dair sənədlərin qəbulu və hərəkət tərkibinin tormoz başmaqları ilə bərkidilməsi"
+    },
+    {
+      "id": 3,
+      "type": "rect",
+      "x": 360,
+      "y": 180,
+      "w": 200,
+      "h": 70,
+      "text": "Natura vərəqəsinin tərtib edilməsi"
+    },
+    {
+      "id": 4,
+      "type": "rect",
+      "x": 600,
+      "y": 180,
+      "w": 240,
+      "h": 90,
+      "text": "Kommersiya baxışının təşkil edilməsi və zəruri hallarda uyğunsuzluqların qeydiyyatının aparılması"
+    },
+    {
+      "id": 5,
+      "type": "rect",
+      "x": 90,
+      "y": 290,
+      "w": 220,
+      "h": 70,
+      "text": "Sənədlərin VPD-yə təhvil verilməsi"
+    },
+    {
+      "id": "5.1",
+      "type": "stroke",
+      "x": 360,
+      "y": 290,
+      "w": 260,
+      "h": 80,
+      "text": "\"UDPAS\" proqramında vaqonlara dair müvafiq məlumatların daxil edilməsi"
+    },
+    {
+      "id": "5.2",
+      "type": "stroke",
+      "x": 660,
+      "y": 290,
+      "w": 260,
+      "h": 80,
+      "text": "Vaqonların aidiyyəti üzrə Mərkəzin terminal yollarına yerləşdirilməsi"
+    },
+    {
+      "id": "5.3",
+      "type": "stroke",
+      "x": 960,
+      "y": 290,
+      "w": 260,
+      "h": 80,
+      "text": "Hərəkət tərkibinin tormoz başmaqların quraşdırılması"
+    },
+    {
+      "id": 6,
+      "type": "rect",
+      "x": 90,
+      "y": 400,
+      "w": 220,
+      "h": 80,
+      "text": "Yükə dair sənədlərin qəbulu və çeşidlənməsi"
+    },
+    {
+      "id": 7,
+      "type": "rect",
+      "x": 360,
+      "y": 400,
+      "w": 240,
+      "h": 80,
+      "text": "Sənədlərin emalı və müvafiq məlumatların \"UDPAS\" proqramına əlavə edilməsi"
+    },
+    {
+      "id": "7.1",
+      "type": "stroke",
+      "x": 660,
+      "y": 400,
+      "w": 260,
+      "h": 80,
+      "text": "SMGS yük nəqliyyat qaiməsinin 1-ci və 2-ci nüsxələrinin möhürlənməsi"
+    },
+    {
+      "id": "7.2",
+      "type": "stroke",
+      "x": 960,
+      "y": 400,
+      "w": 260,
+      "h": 80,
+      "text": "SMGS yük nəqliyyat qaiməsinin 2-ci və 3-cü nüsxələrinin ADY-yə təhvil verilməsi"
+    },
+    {
+      "id": 8,
+      "type": "rect",
+      "x": 90,
+      "y": 510,
+      "w": 240,
+      "h": 80,
+      "text": "Müştəri ilə əlaqə yaradılması və yükün Mərkəzə çatması barədə məlumat verilməsi"
+    },
+    {
+      "id": 9,
+      "type": "rect",
+      "x": 360,
+      "y": 510,
+      "w": 240,
+      "h": 80,
+      "text": "Yükə dair sənədləri gömrük rəsmiləşdirilməsi məqsədilə müştəriyə təqdim edilməsi"
+    },
+    {
+      "id": 11,
+      "type": "rect",
+      "x": 660,
+      "y": 510,
+      "w": 240,
+      "h": 80,
+      "text": "Cəmiyyət tərəfindən göstəriləcək xidmətlərə dair sifariş sənədinin hazırlanması"
+    },
+    {
+      "id": 13,
+      "type": "rect",
+      "x": 960,
+      "y": 510,
+      "w": 240,
+      "h": 80,
+      "text": "Ödənişin qəbul edilməsi və müştərinin yükaşırma sahəsinə yönləndirilməsi"
+    },
+    {
+      "id": 10,
+      "type": "rect",
+      "x": 360,
+      "y": 640,
+      "w": 240,
+      "h": 80,
+      "text": "Yükə dair sənədləri gömrük rəsmiləşdirilməsi məqsədilə müştəriyə təqdim edilməsi"
+    },
+    {
+      "id": 12,
+      "type": "rect",
+      "x": 660,
+      "y": 640,
+      "w": 240,
+      "h": 70,
+      "text": "Ödənişin həyata keçirilməsi"
+    },
+    {
+      "id": 14,
+      "type": "rect",
+      "x": 960,
+      "y": 640,
+      "w": 240,
+      "h": 70,
+      "text": "Müvafiq yükaşırma sahəsinə yaxınlaşması"
+    },
+    {
+      "id": 15,
+      "type": "rect",
+      "x": 90,
+      "y": 790,
+      "w": 240,
+      "h": 130,
+      "text": "Sənədlərin yoxlanılması və Cəmiyyət tərəfindən göstərilən xidmətlərə dair terminal rüsumların tam şəkildə ödənilməsinin nəzərdən keçirilməsi"
+    },
+    {
+      "id": 18,
+      "type": "rect",
+      "x": 380,
+      "y": 790,
+      "w": 240,
+      "h": 90,
+      "text": "Yükün aşırılması üçün zəruri işçi qüvvəsi və texniki resursların cəlb edilməsi"
+    },
+    {
+      "id": 19,
+      "type": "rect",
+      "x": 660,
+      "y": 790,
+      "w": 240,
+      "h": 90,
+      "text": "Yükaşırma əməliyyatının icra edilməsi (yüklərin vaqondan boşaldılaraq yük avtomobilinə yüklənməsi)"
+    },
+    {
+      "id": "5.3.1",
+      "type": "stroke",
+      "x": 1280,
+      "y": 790,
+      "w": 260,
+      "h": 90,
+      "text": "Vaqona vizual baxışın keçirilməsi"
+    },
+    {
+      "id": 16,
+      "type": "rect",
+      "x": 90,
+      "y": 940,
+      "w": 240,
+      "h": 130,
+      "text": "Mərkəzin TIR parkında olan əvvəlcədən qeydiyyatda olan müştərinin nəqliyyat vasitəsinə \"UDPAS\" proqramı üzərindən çağırış verilməsi"
+    },
+    {
+      "id": 17,
+      "type": "rect",
+      "x": 380,
+      "y": 940,
+      "w": 240,
+      "h": 90,
+      "text": "DGK əməkdaşları ilə birgə vaqona baxışın keçirilməsi və yükün açılması"
+    },
+    {
+      "id": 20,
+      "type": "rect",
+      "x": 660,
+      "y": 940,
+      "w": 240,
+      "h": 110,
+      "text": "Yükaşırma əməliyyatı başa çatdıqdan sonra \"UDPAS\" proqramı üzərindən yük avtomobilinin Mərkəzdən çıxışına dair buraxılışın verilməsi"
+    },
+    {
+      "id": "20.1",
+      "type": "stroke",
+      "x": 960,
+      "y": 940,
+      "w": 260,
+      "h": 80,
+      "text": "Vaqona vizual baxışın keçirilməsi"
+    },
+    {
+      "id": "20.2",
+      "type": "stroke",
+      "x": 960,
+      "y": 1030,
+      "w": 260,
+      "h": 90,
+      "text": "Yükaşırma əməliyyatının başa çatmasına dair \"UDPAS\" proqramında qeydiyyatın aparılması"
+    },
+    {
+      "id": "16.1",
+      "type": "stroke",
+      "x": 90,
+      "y": 1110,
+      "w": 260,
+      "h": 70,
+      "text": "Yük avtomobilinin Mərkəzə daxil olmasının təmin edilməsi"
+    },
+    {
+      "id": "17.1",
+      "type": "stroke",
+      "x": 480,
+      "y": 1110,
+      "w": 260,
+      "h": 70,
+      "text": "Vaqona baxışın keçirilməsi və yükün açılması"
+    },
+    {
+      "id": 21,
+      "type": "pill",
+      "x": 880,
+      "y": 1230,
+      "w": 280,
+      "h": 90,
+      "text": "Yük avtomobilinin Mərkəzdən çıxışının təmin edilməsi"
+    }
   ],
   "edges": [
-    { "from": 1, "to": 2, "s": "bottom", "e": "top" },
-    { "from": 2, "to": 3, "s": "right", "e": "left" },
-    { "from": 3, "to": 4, "s": "right", "e": "left" },
-    { "from": 2, "to": 5, "s": "bottom", "e": "top" },
-    { "from": 5, "to": "5.1", "s": "right", "e": "left", "dashed": true },
-    { "from": "5.1", "to": "5.2", "s": "right", "e": "left", "dashed": true },
-    { "from": "5.2", "to": "5.3", "s": "right", "e": "left", "dashed": true },
-    { "from": 5, "to": 6, "s": "bottom", "e": "top" },
-    { "from": 6, "to": 7, "s": "right", "e": "left" },
-    { "from": 7, "to": "7.1", "s": "right", "e": "left", "dashed": true },
-    { "from": "7.1", "to": "7.2", "s": "right", "e": "left", "dashed": true },
-    { "from": 6, "to": 8, "s": "bottom", "e": "top" },
-    { "from": 8, "to": 9, "s": "right", "e": "left" },
-    { "from": 9, "to": 10, "s": "bottom", "e": "top" },
-    { "from": 9, "to": 11, "s": "right", "e": "left", "via": [{ "x": 630, "y": 550 }] },
-    { "from": 11, "to": 13, "s": "right", "e": "left" },
-    { "from": 11, "to": 12, "s": "bottom", "e": "top" },
-    { "from": 12, "to": 13, "s": "top", "e": "bottom", "via": [{ "x": 1080, "y": 620 }] },
-    { "from": 13, "to": 14, "s": "bottom", "e": "top" },
-    { "from": 14, "to": 15, "s": "left", "e": "top", "via": [{ "x": 210, "y": 770 }] },
-    { "from": 15, "to": 16, "s": "bottom", "e": "top" },
-    { "from": 16, "to": 17, "s": "right", "e": "left" },
-    { "from": 17, "to": 18, "s": "top", "e": "bottom" },
-    { "from": 18, "to": 19, "s": "right", "e": "left" },
-    { "from": 19, "to": 20, "s": "bottom", "e": "top" },
-    { "from": 20, "to": 21, "s": "bottom", "e": "top" },
-    { "from": "5.3", "to": "5.3.1", "s": "bottom", "e": "right", "via": [{ "x": 1620, "y": 380 }, { "x": 1620, "y": 835 }], "dashed": true },
-    { "from": 16, "to": "16.1", "s": "bottom", "e": "top", "dashed": true },
-    { "from": 17, "to": "17.1", "s": "bottom", "e": "top", "dashed": true },
-    { "from": 20, "to": "20.1", "s": "right", "e": "left", "dashed": true },
-    { "from": "20.1", "to": "20.2", "s": "bottom", "e": "top", "dashed": true }
-  ]
+    {
+      "from": 1,
+      "to": 2,
+      "s": "bottom",
+      "e": "top"
+    },
+    {
+      "from": 2,
+      "to": 3,
+      "s": "right",
+      "e": "left"
+    },
+    {
+      "from": 3,
+      "to": 4,
+      "s": "right",
+      "e": "left"
+    },
+    {
+      "from": 2,
+      "to": 5,
+      "s": "bottom",
+      "e": "top"
+    },
+    {
+      "from": 5,
+      "to": "5.1",
+      "s": "right",
+      "e": "left",
+      "dashed": true
+    },
+    {
+      "from": "5.1",
+      "to": "5.2",
+      "s": "right",
+      "e": "left",
+      "dashed": true
+    },
+    {
+      "from": "5.2",
+      "to": "5.3",
+      "s": "right",
+      "e": "left",
+      "dashed": true
+    },
+    {
+      "from": 5,
+      "to": 6,
+      "s": "bottom",
+      "e": "top"
+    },
+    {
+      "from": 6,
+      "to": 7,
+      "s": "right",
+      "e": "left"
+    },
+    {
+      "from": 7,
+      "to": "7.1",
+      "s": "right",
+      "e": "left",
+      "dashed": true
+    },
+    {
+      "from": "7.1",
+      "to": "7.2",
+      "s": "right",
+      "e": "left",
+      "dashed": true
+    },
+    {
+      "from": 6,
+      "to": 8,
+      "s": "bottom",
+      "e": "top"
+    },
+    {
+      "from": 8,
+      "to": 9,
+      "s": "right",
+      "e": "left"
+    },
+    {
+      "from": 9,
+      "to": 10,
+      "s": "bottom",
+      "e": "top"
+    },
+    {
+      "from": 9,
+      "to": 11,
+      "s": "right",
+      "e": "left",
+      "via": [
+        {
+          "x": 630,
+          "y": 550
+        }
+      ]
+    },
+    {
+      "from": 11,
+      "to": 13,
+      "s": "right",
+      "e": "left"
+    },
+    {
+      "from": 11,
+      "to": 12,
+      "s": "bottom",
+      "e": "top"
+    },
+    {
+      "from": 12,
+      "to": 13,
+      "s": "top",
+      "e": "bottom",
+      "via": [
+        {
+          "x": 1080,
+          "y": 620
+        }
+      ]
+    },
+    {
+      "from": 13,
+      "to": 14,
+      "s": "bottom",
+      "e": "top"
+    },
+    {
+      "from": 14,
+      "to": 15,
+      "s": "left",
+      "e": "top",
+      "via": [
+        {
+          "x": 210,
+          "y": 770
+        }
+      ]
+    },
+    {
+      "from": 15,
+      "to": 16,
+      "s": "bottom",
+      "e": "top"
+    },
+    {
+      "from": 16,
+      "to": 17,
+      "s": "right",
+      "e": "left"
+    },
+    {
+      "from": 17,
+      "to": 18,
+      "s": "top",
+      "e": "bottom"
+    },
+    {
+      "from": 18,
+      "to": 19,
+      "s": "right",
+      "e": "left"
+    },
+    {
+      "from": 19,
+      "to": 20,
+      "s": "bottom",
+      "e": "top"
+    },
+    {
+      "from": 20,
+      "to": 21,
+      "s": "bottom",
+      "e": "top"
+    },
+    {
+      "from": "5.3",
+      "to": "5.3.1",
+      "s": "bottom",
+      "e": "right",
+      "via": [
+        {
+          "x": 1620,
+          "y": 380
+        },
+        {
+          "x": 1620,
+          "y": 835
+        }
+      ],
+      "dashed": true
+    },
+    {
+      "from": 16,
+      "to": "16.1",
+      "s": "bottom",
+      "e": "top",
+      "dashed": true
+    },
+    {
+      "from": 17,
+      "to": "17.1",
+      "s": "bottom",
+      "e": "top",
+      "dashed": true
+    },
+    {
+      "from": 20,
+      "to": "20.1",
+      "s": "right",
+      "e": "left",
+      "dashed": true
+    },
+    {
+      "from": "20.1",
+      "to": "20.2",
+      "s": "bottom",
+      "e": "top",
+      "dashed": true
+    }
+  ],
+  "subtitle": "ALM-X1-C1"
 }

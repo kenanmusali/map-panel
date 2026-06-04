@@ -14,6 +14,23 @@ const DRAFT_KEY = (id) => `absheron_draft_${id}`;
 const LANE_PAD = 20;
 const LANE_MIN_H = 160;
 
+// Mirror of DiagramCanvas's auto-fit content size, so fit-to-screen scales correctly.
+function canvasDims(process) {
+  const RAIL_W = 56, PAD_RIGHT = 80, PAD_BOTTOM = 40, MIN_W = 700, MIN_H = 300;
+  const nodes = process?.nodes || [];
+  const lanes = process?.lanes || [];
+  const contentRight = nodes.length
+    ? Math.max(...nodes.map(n => (n.x || 0) + (n.w || 0)))
+    : RAIL_W + 200;
+  const contentBottom = lanes.length
+    ? Math.max(...lanes.map(l => (l.y || 0) + (l.h || 0)))
+    : 200;
+  return {
+    w: Math.max(MIN_W, contentRight + PAD_RIGHT),
+    h: Math.max(MIN_H, contentBottom + PAD_BOTTOM)
+  };
+}
+
 /**
  * Repack lanes vertically so each lane fits its assigned nodes.
  * - Stacks lanes top-to-bottom starting at y=20.
@@ -93,8 +110,9 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
   const [fitWidth, setFitWidth] = useState(false);
   // Side panel open/close (edit mode)
   const [panelOpen, setPanelOpen] = useState(true);
-  // Live width of the diagram container, for fit-to-width scaling
+  // Live size of the diagram container, for fit-to-screen scaling
   const [containerW, setContainerW] = useState(0);
+  const [containerH, setContainerH] = useState(0);
   const containerRef = useRef(null);
 
   const [hasDraft, setHasDraft] = useState(false);
@@ -110,7 +128,7 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
   useEffect(() => {
     const el = containerRef.current;
     if (!el) return;
-    const measure = () => setContainerW(el.clientWidth);
+    const measure = () => { setContainerW(el.clientWidth); setContainerH(el.clientHeight); };
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
@@ -523,33 +541,37 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
             )}
             {!loading && !error && process && (() => {
               const pad = 32; // container padding (16 each side)
-              const avail = Math.max(0, containerW - pad);
-              const scale = (fitWidth && !editMode && process.width && avail)
-                ? Math.min(1, avail / process.width)
+              const dims = canvasDims(process);
+              const availW = Math.max(0, containerW - pad);
+              const availH = Math.max(0, containerH - pad);
+              const fit = fitWidth && !editMode && dims.w && dims.h && availW && availH;
+              const scale = fit
+                ? Math.min(1, availW / dims.w, availH / dims.h)
                 : 1;
               const wrapStyle = scale < 1
                 ? {
-                    width: process.width,
-                    height: (process.height || 0) * scale,
+                    width: dims.w,
+                    height: dims.h,
                     transform: `scale(${scale})`,
                     transformOrigin: 'top left'
                   }
                 : undefined;
-              return (
-                <div className="canvas-scale" style={wrapStyle}>
-                  <DiagramCanvas
-                    process={process}
-                    selectedNodeId={editMode && selection?.kind === 'node' ? selection.id : null}
-                    modalNodeId={!editMode && selection?.kind === 'node' ? selection.id : null}
-                    editMode={!isViewer && editMode}
-                    onNodeClick={onNodeClick}
-                    onLaneClick={onLaneClick}
-                    onNodeMove={onNodeMove}
-                    onNodeMoveEnd={onNodeMoveEnd}
-                    onCreateEdge={onCreateEdge}
-                  />
-                </div>
+              const canvas = (
+                <DiagramCanvas
+                  process={process}
+                  selectedNodeId={editMode && selection?.kind === 'node' ? selection.id : null}
+                  modalNodeId={!editMode && selection?.kind === 'node' ? selection.id : null}
+                  editMode={!isViewer && editMode}
+                  onNodeClick={onNodeClick}
+                  onLaneClick={onLaneClick}
+                  onNodeMove={onNodeMove}
+                  onNodeMoveEnd={onNodeMoveEnd}
+                  onCreateEdge={onCreateEdge}
+                />
               );
+              return scale < 1
+                ? <div className="canvas-scale" style={wrapStyle}>{canvas}</div>
+                : canvas;
             })()}
           </div>
         </div>

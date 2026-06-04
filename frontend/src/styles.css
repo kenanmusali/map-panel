@@ -403,7 +403,9 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.02em; }
 .draft-btn.primary:hover { background: var(--primary-hover); }
 
 /* Lanes */
-.rail-layer { position: absolute; top: 0; left: 0; width: 56px; height: 100%; z-index: 6; pointer-events: none; will-change: transform; }
+.rail-layer { position: absolute; 
+  box-shadow:-20px -10px white;
+  top: 0; left: 0; width: 56px; height: 100%; z-index: 6; pointer-events: none; will-change: transform; }
 .rail-layer .lane-rail { pointer-events: auto; }
 .lane-rail {
   position: absolute; left: 0; width: 56px;

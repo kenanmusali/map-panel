@@ -770,3 +770,72 @@ details[open] summary::before { transform: rotate(90deg); }
   .pdf-action-btn span { display: none; }
   .topbar { padding: 0 14px; }
 }
+
+/* ===================== Groups (diagrams + PDF) ===================== */
+.group-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  margin-bottom: 12px;
+  overflow: hidden;
+  box-shadow: var(--sh-xs);
+}
+.group-card.open { box-shadow: var(--sh-md); }
+
+.group-head {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px;
+  cursor: pointer;
+  user-select: none;
+  background: var(--surface-soft);
+  transition: background 0.18s var(--ease);
+}
+.group-head:hover { background: var(--primary-soft); }
+.group-chevron { display: inline-flex; color: var(--text-secondary); }
+.group-folder { display: inline-flex; color: var(--primary); }
+.group-name { flex: 1; font-weight: 700; font-size: 15px; color: var(--text-primary); }
+.group-count {
+  min-width: 24px; height: 22px; padding: 0 8px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--primary-soft); color: var(--primary-dark);
+  border-radius: var(--r-pill); font-size: 12.5px; font-weight: 700;
+}
+.group-actions { display: inline-flex; gap: 6px; margin-left: 4px; }
+.group-act-btn {
+  width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); background: var(--surface);
+  border-radius: var(--r-sm); color: var(--text-secondary);
+  cursor: pointer; transition: all 0.15s var(--ease);
+}
+.group-act-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--surface-soft); }
+.group-act-btn.danger:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+
+.group-body {
+  padding: 10px;
+  display: flex; flex-direction: column; gap: 8px;
+  background: var(--bg-soft);
+}
+.group-body .process-item { padding: 12px 14px; }
+
+/* Diagram/PDF row title + secondary name */
+.row-title { display: block; font-weight: 600; font-size: 14.5px; color: var(--text-primary); }
+.row-subtitle {
+  display: block; margin-top: 2px;
+  font-size: 12.5px; font-weight: 500; color: var(--text-muted);
+  line-height: 1.35;
+}
+.row-actions { display: inline-flex; gap: 4px; margin-left: auto; }
+
+.child-empty {
+  padding: 12px 14px; font-size: 13px; color: var(--text-muted);
+  text-align: center;
+}
+
+/* group create/rename select styling reuse */
+.pdf-field select {
+  width: 100%; padding: 10px 12px;
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  font-size: 14px; color: var(--text-primary); background: var(--surface);
+}
+.pdf-field select:focus { outline: none; border-color: var(--primary); box-shadow: var(--ring); }

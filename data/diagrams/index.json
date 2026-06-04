@@ -1,20 +1,11 @@
 {
+  "groups": [
+    { "id": 1, "name": "Ümumi" }
+  ],
   "processes": [
-    {
-      "id": 1,
-      "title": "Vaqonların Mərkəzə qəbulu prosesi"
-    },
-    {
-      "id": 2,
-      "title": "Dəmir yolu ilə daxil olan yüklərə dair sənədlərin çeşidlənməsi prosesi"
-    },
-    {
-      "id": 3,
-      "title": "Dəmir yolu ilə idxal olunan vaqon yüklərinin yük avtomobilinə boşaldılması və müştəriyə təhvil verilməsi iş axını"
-    },
-    {
-      "id": 4,
-      "title": "test"
-    }
+    { "id": 1, "title": "Vaqonların Mərkəzə qəbulu prosesi", "subtitle": "", "groupId": 1 },
+    { "id": 2, "title": "Dəmir yolu ilə daxil olan yüklərə dair sənədlərin çeşidlənməsi prosesi", "subtitle": "", "groupId": 1 },
+    { "id": 3, "title": "Dəmir yolu ilə idxal olunan vaqon yüklərinin yük avtomobilinə boşaldılması və müştəriyə təhvil verilməsi iş axını", "subtitle": "", "groupId": 1 },
+    { "id": 4, "title": "test", "subtitle": "", "groupId": 1 }
   ]
 }

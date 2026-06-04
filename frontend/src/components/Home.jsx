@@ -1,7 +1,11 @@
 import { useState, useEffect } from 'react';
 import { LogoFull } from './Logo.jsx';
-import { Search, LogOut, Plus, Loader2, Trash2, Archive, ChevronLeft, ChevronRight, ChevronDown } from './icons.jsx';
+import {
+  Search, LogOut, Plus, Loader2, Trash2, ChevronLeft,
+  ChevronRight, ChevronDown, Folder, FolderOpen, FolderPlus, Pencil, Edit3
+} from './icons.jsx';
 import { api, setToken } from '../api/client.js';
+import NameModal from './NameModal.jsx';
 
 function fmtTime(d) {
   const h = d.getHours();
@@ -10,7 +14,6 @@ function fmtTime(d) {
   const hh = (h % 12 || 12).toString().padStart(2, '0');
   return `${hh}:${m} ${period}`;
 }
-
 function fmtDate(d) {
   const dd = d.getDate().toString().padStart(2, '0');
   const mm = (d.getMonth() + 1).toString().padStart(2, '0');
@@ -20,16 +23,13 @@ function fmtDate(d) {
 export default function Home({ onOpen, onLogout, onBack }) {
   const [now, setNow] = useState(new Date());
   const [query, setQuery] = useState('');
+  const [groups, setGroups] = useState([]);
   const [processes, setProcesses] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [showArchived, setShowArchived] = useState(false);
-
-  // Per-process expand state for the nested node list
-  const [expanded, setExpanded] = useState({});       // id -> bool
-  const [details, setDetails] = useState({});         // id -> nodes[]
-  const [detailLoading, setDetailLoading] = useState({}); // id -> bool
+  const [expanded, setExpanded] = useState({});   // groupId -> bool
+  const [modal, setModal] = useState(null);        // see types below
+  const [busy, setBusy] = useState(false);
 
   const role = localStorage.getItem('role');
   const isViewer = role === 'viewer';
@@ -45,60 +45,22 @@ export default function Home({ onOpen, onLogout, onBack }) {
     setLoading(true);
     setError('');
     try {
-      const list = await api.listProcesses();
-      setProcesses(list);
+      const data = await api.listProcesses();
+      const gs = data.groups || [];
+      setGroups(gs);
+      setProcesses(data.processes || []);
+      // expand all groups by default the first time
+      setExpanded(prev => {
+        if (Object.keys(prev).length) return prev;
+        const o = {};
+        gs.forEach(g => { o[g.id] = true; });
+        return o;
+      });
     } catch (e) {
       setError(e.message);
       if (e.status === 401) onLogout();
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function createNew() {
-    const title = prompt('Proses adı:');
-    if (!title) return;
-    setCreating(true);
-    try {
-      const p = await api.createProcess({
-        title, width: 2200, height: 900,
-        lanes: [], nodes: [], edges: [], archived: false
-      });
-      await load();
-      onOpen(p.id);
-    } catch (e) {
-      alert('Xəta: ' + e.message);
-    } finally {
-      setCreating(false);
-    }
-  }
-
-  async function toggleExpand(e, p) {
-    e.stopPropagation();
-    const id = p.id || p._id;
-    const isOpen = !!expanded[id];
-    setExpanded(prev => ({ ...prev, [id]: !isOpen }));
-    if (!isOpen && !details[id]) {
-      setDetailLoading(prev => ({ ...prev, [id]: true }));
-      try {
-        const full = await api.getProcess(id);
-        setDetails(prev => ({ ...prev, [id]: full.nodes || [] }));
-      } catch (err) {
-        setDetails(prev => ({ ...prev, [id]: [] }));
-      } finally {
-        setDetailLoading(prev => ({ ...prev, [id]: false }));
-      }
-    }
-  }
-
-  async function deleteProcess(e, p) {
-    e.stopPropagation();
-    if (!confirm(`"${p.title}" prosesini tamamilə silmək istəyirsiniz? Bu əməliyyat geri alına bilməz.`)) return;
-    try {
-      await api.deleteProcess(p.id || p._id);
-      setProcesses(prev => prev.filter(x => (x.id || x._id) !== (p.id || p._id)));
-    } catch (err) {
-      alert('Silinə bilmədi: ' + err.message);
     }
   }
 
@@ -109,19 +71,72 @@ export default function Home({ onOpen, onLogout, onBack }) {
     onLogout();
   }
 
+  function toggleGroup(gid) {
+    setExpanded(prev => ({ ...prev, [gid]: !prev[gid] }));
+  }
+
+  /* ---------- group actions ---------- */
+  async function saveGroupCreate({ name }) {
+    const g = await api.createGroup(name);
+    setExpanded(prev => ({ ...prev, [g.id]: true }));
+    setModal(null);
+    await load();
+  }
+  async function saveGroupRename({ name }) {
+    await api.renameGroup(modal.group.id, name);
+    setModal(null);
+    await load();
+  }
+  async function deleteGroup(g) {
+    const count = processes.filter(p => Number(p.groupId) === Number(g.id)).length;
+    const msg = count
+      ? `"${g.name}" qrupunu və içindəki ${count} diaqramı silmək istəyirsiniz? Geri alına bilməz.`
+      : `"${g.name}" qrupunu silmək istəyirsiniz?`;
+    if (!confirm(msg)) return;
+    try {
+      await api.deleteGroup(g.id);
+      await load();
+    } catch (e) { alert('Silinə bilmədi: ' + e.message); }
+  }
+
+  /* ---------- diagram actions ---------- */
+  async function saveDiagramCreate({ name, subtitle }) {
+    setBusy(true);
+    try {
+      const p = await api.createProcess({
+        title: name, subtitle, groupId: modal.groupId,
+        width: 2200, height: 900, lanes: [], nodes: [], edges: []
+      });
+      setModal(null);
+      await load();
+      onOpen(p.id);
+    } catch (e) {
+      alert('Xəta: ' + e.message);
+    } finally { setBusy(false); }
+  }
+  async function saveDiagramEdit({ name, subtitle }) {
+    await api.updateProcessMeta(modal.proc.id, { title: name, subtitle });
+    setModal(null);
+    await load();
+  }
+  async function deleteProcess(e, p) {
+    e.stopPropagation();
+    if (!confirm(`"${p.title}" diaqramını silmək istəyirsiniz? Geri alına bilməz.`)) return;
+    try {
+      await api.deleteProcess(p.id);
+      setProcesses(prev => prev.filter(x => x.id !== p.id));
+    } catch (err) { alert('Silinə bilmədi: ' + err.message); }
+  }
+
   const q = query.trim().toLowerCase();
-
-  const active = processes.filter(p => {
-    if (p.archived) return false;
+  function matches(p) {
     if (!q) return true;
-    return (p.title || '').toLowerCase().includes(q) || String(p.id).includes(q);
-  });
+    return (p.title || '').toLowerCase().includes(q)
+      || (p.subtitle || '').toLowerCase().includes(q)
+      || String(p.id).includes(q);
+  }
 
-  const archived = processes.filter(p => {
-    if (!p.archived) return false;
-    if (!q) return true;
-    return (p.title || '').toLowerCase().includes(q) || String(p.id).includes(q);
-  });
+  const noResults = !loading && !error && groups.length === 0 && processes.length === 0;
 
   return (
     <>
@@ -139,7 +154,7 @@ export default function Home({ onOpen, onLogout, onBack }) {
           <LogOut size={16} /><span>Çıxış</span>
         </button>
       </div>
-<br />
+      <br />
       <div className="home-wrap">
         <LogoFull size="large" />
         <h2 className="home-title">
@@ -159,57 +174,70 @@ export default function Home({ onOpen, onLogout, onBack }) {
         <div className="process-list">
           {loading && <div className="empty-state"><Loader2 size={20} className="spin" />Yüklənir...</div>}
           {error && !loading && <div className="empty-state error">{error}</div>}
-          {!loading && !error && active.length === 0 && archived.length === 0 && (
-            <div className="empty-state">Heç bir nəticə tapılmadı</div>
-          )}
+          {noResults && <div className="empty-state">Heç bir qrup yoxdur</div>}
 
-          {!loading && active.map(p => {
-            const pid = p.id || p._id;
-            const isOpen = !!expanded[pid];
-            const nodes = details[pid] || [];
-            const isDetailLoading = !!detailLoading[pid];
+          {!loading && !error && groups.map(g => {
+            const items = processes.filter(p => Number(p.groupId) === Number(g.id) && matches(p));
+            const total = processes.filter(p => Number(p.groupId) === Number(g.id)).length;
+            // hide a group if searching and it has no matches
+            if (q && items.length === 0) return null;
+            const isOpen = q ? true : !!expanded[g.id];
+
             return (
-              <div key={pid} className={`process-group ${isOpen ? 'open' : ''}`}>
-                <div className="process-item" onClick={() => onOpen(pid)}>
-                  <button
-                    className={`chevron-btn ${isOpen ? 'open' : ''}`}
-                    title={isOpen ? 'Bağla' : 'Addımları göstər'}
-                    onClick={(e) => toggleExpand(e, p)}
-                  >
-                    {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                  </button>
-                  <div className="num">{pid}</div>
-                  <div className="label">{p.title}</div>
+              <div key={g.id} className={`group-card ${isOpen ? 'open' : ''}`}>
+                <div className="group-head" onClick={() => toggleGroup(g.id)}>
+                  <span className="group-chevron">
+                    {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                  </span>
+                  <span className="group-folder">
+                    {isOpen ? <FolderOpen size={18} /> : <Folder size={18} />}
+                  </span>
+                  <span className="group-name">{g.name}</span>
+                  <span className="group-count">{total}</span>
+
                   {!isViewer && (
-                    <button
-                      className="delete-archive-btn"
-                      title="Sil"
-                      style={{ marginLeft: 'auto' }}
-                      onClick={(e) => deleteProcess(e, p)}
-                    >
-                      <Trash2 size={16} />
-                    </button>
+                    <span className="group-actions" onClick={e => e.stopPropagation()}>
+                      <button className="group-act-btn" title="Diaqram əlavə et"
+                        onClick={() => setModal({ type: 'diagram-create', groupId: g.id })}>
+                        <Plus size={16} />
+                      </button>
+                      <button className="group-act-btn" title="Adı dəyiş"
+                        onClick={() => setModal({ type: 'group-rename', group: g })}>
+                        <Pencil size={15} />
+                      </button>
+                      <button className="group-act-btn danger" title="Qrupu sil"
+                        onClick={() => deleteGroup(g)}>
+                        <Trash2 size={15} />
+                      </button>
+                    </span>
                   )}
                 </div>
 
                 {isOpen && (
-                  <div className="process-children">
-                    {isDetailLoading && (
-                      <div className="child-empty"><Loader2 size={14} className="spin" /> Yüklənir...</div>
+                  <div className="group-body">
+                    {items.length === 0 && (
+                      <div className="child-empty">Bu qrupda diaqram yoxdur.</div>
                     )}
-                    {!isDetailLoading && nodes.length === 0 && (
-                      <div className="child-empty">Bu prosesdə addım yoxdur.</div>
-                    )}
-                    {!isDetailLoading && nodes.map(n => (
-                      <button
-                        key={n.id}
-                        className="child-item"
-                        title="Açmaq üçün klikləyin"
-                        onClick={(e) => { e.stopPropagation(); onOpen(pid, n.id); }}
-                      >
-                        <span className={`child-badge ${n.type || 'rect'}`}>{n.id}</span>
-                        <span className="child-label">{n.text || '(adsız)'}</span>
-                      </button>
+                    {items.map((p, idx) => (
+                      <div key={p.id} className="process-item diagram-row" onClick={() => onOpen(p.id)}>
+                        <div className="num">{idx + 1}</div>
+                        <div className="label">
+                          <span className="row-title">{p.title}</span>
+                          {p.subtitle ? <span className="row-subtitle">{p.subtitle}</span> : null}
+                        </div>
+                        {!isViewer && (
+                          <div className="row-actions" onClick={e => e.stopPropagation()}>
+                            <button className="delete-archive-btn" title="Redaktə et"
+                              onClick={() => setModal({ type: 'diagram-edit', proc: p })}>
+                              <Edit3 size={16} />
+                            </button>
+                            <button className="delete-archive-btn" title="Sil"
+                              onClick={(e) => deleteProcess(e, p)}>
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
                 )}
@@ -217,64 +245,33 @@ export default function Home({ onOpen, onLogout, onBack }) {
             );
           })}
 
-     {!isViewer && !loading && archived.length > 0 && (
-  <>
-    <button className="archive-toggle" onClick={() => setShowArchived(v => !v)}>
-      <Archive size={14} />
-      <span>Arxiv ({archived.length})</span>
-      <span className="archive-toggle-arrow">{showArchived ? '▴' : '▾'}</span>
-    </button>
-
-    {showArchived && archived.map(p => (
-      <div
-        key={p.id || p._id}
-        className="process-item archived-item"
-        onClick={() => onOpen(p.id || p._id)}
-      >
-        <div className="num" style={{ opacity: 0.5 }}>{p.id || p._id}</div>
-        <div className="label">
-          {p.title}
-          <span className="archive-badge">Arxiv</span>
-        </div>
-        <button
-          className="delete-archive-btn"
-          title="Arxivdən çıxar"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (confirm('Bu prosesi arxivdən çıxarmaq istəyirsiniz?')) {
-              api.updateProcess(p.id || p._id, { ...p, archived: false })
-                .then(() => load());
-            }
-          }}
-        >
-          <Archive size={14} />
-        </button>
-        <button
-          className="delete-archive-btn"
-          title="Tamamilə sil"
-          onClick={(e) => {
-            e.stopPropagation();
-            if (confirm(`"${p.title}" prosesini tamamilə silmək istəyirsiniz? Bu əməliyyat geri alına bilməz.`)) {
-              api.deleteProcess(p.id || p._id)
-                .then(() => load());
-            }
-          }}
-        >
-          <Trash2 size={14} />
-        </button>
-      </div>
-    ))}
-  </>
-)}
-
-          {!isViewer && (
-            <button className="process-item create-btn" onClick={createNew} disabled={creating}>
-              <div className="num"><Plus size={22} /></div>
-              <div className="label">{creating ? 'Yaradılır...' : 'Yeni proses əlavə et'}</div>
+          {!isViewer && !loading && (
+            <button className="process-item create-btn" onClick={() => setModal({ type: 'group-create' })} disabled={busy}>
+              <div className="num"><FolderPlus size={20} /></div>
+              <div className="label">Yeni qrup yarat</div>
             </button>
           )}
         </div>
       </div>
+
+      {modal?.type === 'group-create' && (
+        <NameModal heading="Yeni qrup" nameLabel="Qrup adı" namePlaceholder="Qrupun adı"
+          saveLabel="Yarat" onClose={() => setModal(null)} onSave={saveGroupCreate} />
+      )}
+      {modal?.type === 'group-rename' && (
+        <NameModal heading="Qrupu adlandır" nameLabel="Qrup adı" name0={modal.group.name}
+          onClose={() => setModal(null)} onSave={saveGroupRename} />
+      )}
+      {modal?.type === 'diagram-create' && (
+        <NameModal heading="Yeni diaqram" nameLabel="Diaqram adı" withSubtitle
+          namePlaceholder="Əsas ad" subtitlePlaceholder="Qısa ikinci ad (məcburi deyil)"
+          saveLabel="Yarat və aç" onClose={() => setModal(null)} onSave={saveDiagramCreate} />
+      )}
+      {modal?.type === 'diagram-edit' && (
+        <NameModal heading="Diaqramı redaktə et" nameLabel="Diaqram adı" withSubtitle
+          name0={modal.proc.title || ''} subtitle0={modal.proc.subtitle || ''}
+          onClose={() => setModal(null)} onSave={saveDiagramEdit} />
+      )}
     </>
   );
 }

@@ -58,20 +58,29 @@ async function fetchBlob(id) {
 }
 
 export const pdfsApi = {
+  // Returns { groups, pdfs }
   list: () => jsonRequest('GET', '/api/pdfs'),
 
-  create: ({ title, file }) =>
+  createGroup: (name) => jsonRequest('POST', '/api/pdfs/group', { name }),
+  renameGroup: (gid, name) => jsonRequest('PUT', `/api/pdfs/group/${gid}`, { name }),
+  deleteGroup: (gid) => jsonRequest('DELETE', `/api/pdfs/group/${gid}`),
+
+  create: ({ title, subtitle, groupId, file }) =>
     fileToBase64(file).then(dataBase64 =>
       jsonRequest('POST', '/api/pdfs', {
         title,
+        subtitle: subtitle || '',
+        groupId,
         filename: file.name,
         dataBase64
       })
     ),
 
-  update: (id, { title, file }) => {
+  update: (id, { title, subtitle, groupId, file }) => {
     const body = {};
     if (typeof title === 'string') body.title = title;
+    if (typeof subtitle === 'string') body.subtitle = subtitle;
+    if (groupId !== undefined) body.groupId = groupId;
     if (file) {
       return fileToBase64(file).then(dataBase64 => {
         body.filename = file.name;

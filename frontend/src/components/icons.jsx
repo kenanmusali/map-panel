@@ -23,5 +23,9 @@ export {
   Loader2,
   CheckCircle2,
   AlertCircle,
-  Archive
+  Archive,
+  Folder,
+  FolderOpen,
+  FolderPlus,
+  Pencil
 } from 'lucide-react';

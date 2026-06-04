@@ -4,24 +4,42 @@ import { getFile, putFile, deleteFile, getBinary, putBinary, deleteBinary } from
 const router = Router();
 const dataPath = () => (process.env.DATA_PATH || 'data').replace(/^\/|\/$/g, '');
 
-const pdfIndexPathLegacy = () => `${dataPath()}/pdfs/index.json`;
-const pdfIndexPathFiles = () => `${dataPath()}/files/index.json`;
+const pdfIndexPath     = () => `${dataPath()}/files/index.json`;
+const pdfFilePathFiles = (id) => `${dataPath()}/files/pdf/pdf-${id}.pdf`;
 const pdfFilePathLegacy  = (id) => `${dataPath()}/pdfs/files/pdf-${id}.pdf`;
 const pdfFilePathLegacy2 = (id) => `${dataPath()}/files/files/pdf-${id}.pdf`;
-const pdfFilePathFiles   = (id) => `${dataPath()}/files/pdf/pdf-${id}.pdf`;
+
+function ensureGroups(idx) {
+  let changed = false;
+  if (!idx || typeof idx !== 'object') idx = {};
+  if (!Array.isArray(idx.pdfs)) { idx.pdfs = []; changed = true; }
+  if (!Array.isArray(idx.groups)) { idx.groups = []; changed = true; }
+
+  const orphans = idx.pdfs.filter(p => !p.groupId);
+  if (orphans.length && idx.groups.length === 0) {
+    idx.groups.push({ id: 1, name: 'Ümumi' });
+    changed = true;
+  }
+  if (orphans.length && idx.groups.length) {
+    const gid = idx.groups[0].id;
+    idx.pdfs.forEach(p => { if (!p.groupId) { p.groupId = gid; changed = true; } });
+  }
+  return { idx, changed };
+}
 
 async function readIndex() {
-  // Try legacy `data/pdfs/index.json` first, then `data/files/index.json`
-  let file = await getFile(pdfIndexPathLegacy());
-  if (file) return file.content;
-  file = await getFile(pdfIndexPathFiles());
-  if (file) return file.content;
-  return { pdfs: [] };
+  const file = await getFile(pdfIndexPath());
+  const { idx } = ensureGroups(file ? file.content : null);
+  return idx;
 }
 
 async function writeIndex(content, message) {
-  // Prefer writing to `data/files/index.json` (where PDFs are stored in this project)
-  return putFile(pdfIndexPathFiles(), content, { message });
+  return putFile(pdfIndexPath(), content, { message });
+}
+
+function nextId(list) {
+  const ids = (list || []).map(x => Number(x.id)).filter(Number.isFinite);
+  return ids.length ? Math.max(...ids) + 1 : 1;
 }
 
 function requireAdmin(req, res, next) {
@@ -29,15 +47,60 @@ function requireAdmin(req, res, next) {
   next();
 }
 
-// GET /api/pdfs — list
+/* =========================== LIST + GROUPS =========================== */
 router.get('/', async (_req, res, next) => {
   try {
-    const idx = await readIndex();
-    res.json(idx.pdfs || []);
+    const file = await getFile(pdfIndexPath());
+    const { idx, changed } = ensureGroups(file ? file.content : null);
+    if (changed) await writeIndex(idx, 'Migrate pdfs to groups').catch(() => {});
+    res.json({ groups: idx.groups || [], pdfs: idx.pdfs || [] });
   } catch (e) { next(e); }
 });
 
-// GET /api/pdfs/:id/file — stream the PDF binary
+router.post('/group', requireAdmin, async (req, res, next) => {
+  try {
+    const name = String(req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Qrup adi teleb olunur' });
+    const idx = await readIndex();
+    const group = { id: nextId(idx.groups), name };
+    idx.groups = [...idx.groups, group];
+    await writeIndex(idx, `Create pdf group ${group.id}`);
+    res.status(201).json(group);
+  } catch (e) { next(e); }
+});
+
+router.put('/group/:gid', requireAdmin, async (req, res, next) => {
+  try {
+    const gid = Number(req.params.gid);
+    const name = String(req.body?.name || '').trim();
+    if (!name) return res.status(400).json({ error: 'Qrup adi teleb olunur' });
+    const idx = await readIndex();
+    const g = idx.groups.find(x => Number(x.id) === gid);
+    if (!g) return res.status(404).json({ error: 'Qrup tapilmadi' });
+    g.name = name;
+    await writeIndex(idx, `Rename pdf group ${gid}`);
+    res.json(g);
+  } catch (e) { next(e); }
+});
+
+router.delete('/group/:gid', requireAdmin, async (req, res, next) => {
+  try {
+    const gid = Number(req.params.gid);
+    const idx = await readIndex();
+    const inGroup = idx.pdfs.filter(p => Number(p.groupId) === gid);
+    for (const p of inGroup) {
+      await deleteBinary(pdfFilePathFiles(p.id), { message: `Delete pdf ${p.id} (group ${gid})` }).catch(() => {});
+      await deleteBinary(pdfFilePathLegacy(p.id)).catch(() => {});
+      await deleteBinary(pdfFilePathLegacy2(p.id)).catch(() => {});
+    }
+    idx.pdfs = idx.pdfs.filter(p => Number(p.groupId) !== gid);
+    idx.groups = idx.groups.filter(g => Number(g.id) !== gid);
+    await writeIndex(idx, `Delete pdf group ${gid}`);
+    res.json({ ok: true, deletedPdfs: inGroup.length });
+  } catch (e) { next(e); }
+});
+
+/* =========================== PDF FILE STREAM =========================== */
 router.get('/:id/file', async (req, res, next) => {
   try {
     const id = req.params.id;
@@ -45,7 +108,6 @@ router.get('/:id/file', async (req, res, next) => {
     const meta = (idx.pdfs || []).find(p => Number(p.id) === Number(id));
     if (!meta) return res.status(404).json({ error: 'PDF not found' });
 
-    // Try new path first, then legacy paths
     let bin = await getBinary(pdfFilePathFiles(id));
     if (!bin) bin = await getBinary(pdfFilePathLegacy(id));
     if (!bin) bin = await getBinary(pdfFilePathLegacy2(id));
@@ -58,79 +120,76 @@ router.get('/:id/file', async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
-// POST /api/pdfs — create (admin)
-// Body: { title, filename, dataBase64 }
+/* =========================== PDF CRUD =========================== */
+// Create — MUST belong to a group
 router.post('/', requireAdmin, async (req, res, next) => {
   try {
-    const { title, filename, dataBase64 } = req.body || {};
+    const { title, subtitle, filename, dataBase64, groupId } = req.body || {};
     if (!title || !dataBase64) {
       return res.status(400).json({ error: 'title and dataBase64 are required' });
     }
-
     const idx = await readIndex();
-    const existingIds = (idx.pdfs || []).map(p => Number(p.id)).filter(Number.isFinite);
-    const newId = existingIds.length ? Math.max(...existingIds) + 1 : 1;
+    const gid = Number(groupId);
+    if (!gid || !idx.groups.some(g => Number(g.id) === gid)) {
+      return res.status(400).json({ error: 'PDF bir qrupa aid olmalidir' });
+    }
 
+    const newId = nextId(idx.pdfs);
     const buf = Buffer.from(dataBase64, 'base64');
-    // Write binaries into data/files by default
     await putBinary(pdfFilePathFiles(newId), buf, { message: `Add pdf ${newId}` });
 
     const entry = {
       id: newId,
       title: String(title),
+      subtitle: subtitle ? String(subtitle) : '',
       filename: filename || `pdf-${newId}.pdf`,
       size: buf.length,
+      groupId: gid,
       uploadedAt: new Date().toISOString()
     };
-
-    const nextIdx = { ...idx, pdfs: [...(idx.pdfs || []), entry] };
-    await writeIndex(nextIdx, `Add pdf ${newId} to index`);
-
+    idx.pdfs = [...idx.pdfs, entry];
+    await writeIndex(idx, `Add pdf ${newId} to index`);
     res.status(201).json(entry);
   } catch (e) { next(e); }
 });
 
-// PUT /api/pdfs/:id — update title and optionally replace file (admin)
-// Body: { title?, filename?, dataBase64? }
 router.put('/:id', requireAdmin, async (req, res, next) => {
   try {
     const id = Number(req.params.id);
-    const { title, filename, dataBase64 } = req.body || {};
-
+    const { title, subtitle, filename, dataBase64, groupId } = req.body || {};
     const idx = await readIndex();
-    const list = idx.pdfs || [];
-    const i = list.findIndex(p => Number(p.id) === id);
+    const i = idx.pdfs.findIndex(p => Number(p.id) === id);
     if (i < 0) return res.status(404).json({ error: 'PDF not found' });
 
-    const updated = { ...list[i] };
+    const updated = { ...idx.pdfs[i] };
     if (typeof title === 'string') updated.title = title;
+    if (typeof subtitle === 'string') updated.subtitle = subtitle;
     if (typeof filename === 'string' && filename) updated.filename = filename;
-
+    if (groupId !== undefined) {
+      const gid = Number(groupId);
+      if (idx.groups.some(g => Number(g.id) === gid)) updated.groupId = gid;
+    }
     if (dataBase64) {
       const buf = Buffer.from(dataBase64, 'base64');
-      // Replace binary in files path
       await putBinary(pdfFilePathFiles(id), buf, { message: `Replace pdf ${id}` });
       updated.size = buf.length;
       updated.uploadedAt = new Date().toISOString();
     }
-
-    list[i] = updated;
-    await writeIndex({ ...idx, pdfs: list }, `Update pdf ${id}`);
+    idx.pdfs[i] = updated;
+    await writeIndex(idx, `Update pdf ${id}`);
     res.json(updated);
   } catch (e) { next(e); }
 });
 
-// DELETE /api/pdfs/:id (admin)
 router.delete('/:id', requireAdmin, async (req, res, next) => {
   try {
     const id = Number(req.params.id);
     const idx = await readIndex();
-    const list = (idx.pdfs || []).filter(p => Number(p.id) !== id);
-    // Delete from new path and any legacy paths
+    idx.pdfs = (idx.pdfs || []).filter(p => Number(p.id) !== id);
     await deleteBinary(pdfFilePathFiles(id), { message: `Delete pdf ${id}` }).catch(() => {});
-    await deleteBinary(pdfFilePathLegacy(id), { message: `Delete pdf ${id}` }).catch(() => {});
-    await deleteBinary(pdfFilePathLegacy2(id), { message: `Delete pdf ${id}` }).catch(() => {});
-    await writeIndex({ ...idx, pdfs: list }, `Remove pdf ${id} from index`);
+    await deleteBinary(pdfFilePathLegacy(id)).catch(() => {});
+    await deleteBinary(pdfFilePathLegacy2(id)).catch(() => {});
+    await writeIndex(idx, `Remove pdf ${id} from index`);
     res.json({ ok: true });
   } catch (e) { next(e); }
 });

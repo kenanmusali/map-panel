@@ -46,12 +46,16 @@ async function request(method, path, body) {
 export const api = {
   login: (username, password) => request('POST', '/api/login', { username, password }),
   me:    () => request('GET',  '/api/me'),
+  // Returns { groups, processes }
   listProcesses: () => request('GET', '/api/processes'),
   getProcess:    (id) => request('GET', `/api/processes/${id}`),
   createProcess: (data) => request('POST', '/api/processes', data),
   updateProcess: (id, data) => request('PUT', `/api/processes/${id}`, data),
+  updateProcessMeta: (id, data) => request('PUT', `/api/processes/${id}/meta`, data),
   deleteProcess: (id) => request('DELETE', `/api/processes/${id}`),
-  
-  // Files
-  listFiles: () => request('GET', '/api/files')
+
+  // Diagram groups
+  createGroup: (name) => request('POST', '/api/processes/group', { name }),
+  renameGroup: (gid, name) => request('PUT', `/api/processes/group/${gid}`, { name }),
+  deleteGroup: (gid) => request('DELETE', `/api/processes/group/${gid}`)
 };

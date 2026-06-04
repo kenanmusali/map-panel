@@ -1,9 +1,13 @@
 import { useState, useEffect } from 'react';
 import { LogoFull } from '../Logo.jsx';
-import { ChevronLeft, LogOut, Plus, Loader2, Trash2, Eye, Edit3, Search } from '../icons.jsx';
+import {
+  ChevronLeft, ChevronRight, ChevronDown, LogOut, Plus, Loader2, Trash2,
+  Eye, Edit3, Search, Folder, FolderOpen, FolderPlus, Pencil
+} from '../icons.jsx';
 import { setToken } from '../../api/client.js';
 import { pdfsApi } from '../../api/pdfsClient.js';
 import PdfFormModal from './PdfFormModal.jsx';
+import NameModal from '../NameModal.jsx';
 
 function fmtTime(d) {
   const h = d.getHours();
@@ -36,12 +40,15 @@ function DownloadIcon({ size = 16 }) {
 
 export default function PdfList({ onBack, onLogout }) {
   const [now, setNow] = useState(new Date());
+  const [groups, setGroups] = useState([]);
   const [pdfs, setPdfs] = useState([]);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [busy, setBusy] = useState(null); // id of row currently being downloaded/viewed
-  const [modal, setModal] = useState(null); // null | { mode: 'create' } | { mode: 'edit', pdf }
+  const [busy, setBusy] = useState(null);
+  const [expanded, setExpanded] = useState({});
+  const [modal, setModal] = useState(null); // pdf modal: {mode, pdf?, defaultGroupId?}
+  const [gmodal, setGmodal] = useState(null); // group modal: {type:'create'|'rename', group?}
 
   const role = localStorage.getItem('role');
   const isAdmin = role === 'admin';
@@ -57,10 +64,15 @@ export default function PdfList({ onBack, onLogout }) {
     setLoading(true);
     setError('');
     try {
-      const list = await pdfsApi.list();
-      // sort by id ascending so numbering stays stable
-      list.sort((a, b) => Number(a.id) - Number(b.id));
+      const data = await pdfsApi.list();
+      const gs = data.groups || [];
+      const list = (data.pdfs || []).slice().sort((a, b) => Number(a.id) - Number(b.id));
+      setGroups(gs);
       setPdfs(list);
+      setExpanded(prev => {
+        if (Object.keys(prev).length) return prev;
+        const o = {}; gs.forEach(g => { o[g.id] = true; }); return o;
+      });
     } catch (e) {
       setError(e.message);
       if (e.status === 401) onLogout();
@@ -75,6 +87,7 @@ export default function PdfList({ onBack, onLogout }) {
     localStorage.removeItem('username');
     onLogout();
   }
+  function toggleGroup(gid) { setExpanded(prev => ({ ...prev, [gid]: !prev[gid] })); }
 
   async function viewPdf(p) {
     setBusy(p.id);
@@ -82,38 +95,60 @@ export default function PdfList({ onBack, onLogout }) {
     catch (e) { alert('Xəta: ' + e.message); }
     finally { setBusy(null); }
   }
-
   async function downloadPdf(p) {
     setBusy(p.id);
     try { await pdfsApi.download(p.id, p.filename); }
     catch (e) { alert('Xəta: ' + e.message); }
     finally { setBusy(null); }
   }
-
   async function removePdf(e, p) {
     e.stopPropagation();
     if (!confirm(`"${p.title}" PDF-i silmək istəyirsiniz?`)) return;
     try {
       await pdfsApi.remove(p.id);
       setPdfs(prev => prev.filter(x => x.id !== p.id));
-    } catch (err) {
-      alert('Silinə bilmədi: ' + err.message);
-    }
+    } catch (err) { alert('Silinə bilmədi: ' + err.message); }
   }
 
   async function handleModalSave(payload) {
     try {
-      if (modal?.mode === 'create') {
-        await pdfsApi.create(payload);
-      } else if (modal?.mode === 'edit') {
-        await pdfsApi.update(modal.pdf.id, payload);
-      }
+      if (modal?.mode === 'create') await pdfsApi.create(payload);
+      else if (modal?.mode === 'edit') await pdfsApi.update(modal.pdf.id, payload);
       setModal(null);
       await load();
-    } catch (e) {
-      alert('Xəta: ' + e.message);
-    }
+    } catch (e) { alert('Xəta: ' + e.message); }
   }
+
+  /* group actions */
+  async function saveGroupCreate({ name }) {
+    const g = await pdfsApi.createGroup(name);
+    setExpanded(prev => ({ ...prev, [g.id]: true }));
+    setGmodal(null);
+    await load();
+  }
+  async function saveGroupRename({ name }) {
+    await pdfsApi.renameGroup(gmodal.group.id, name);
+    setGmodal(null);
+    await load();
+  }
+  async function deleteGroup(g) {
+    const count = pdfs.filter(p => Number(p.groupId) === Number(g.id)).length;
+    const msg = count
+      ? `"${g.name}" qrupunu və içindəki ${count} sənədi silmək istəyirsiniz? Geri alına bilməz.`
+      : `"${g.name}" qrupunu silmək istəyirsiniz?`;
+    if (!confirm(msg)) return;
+    try { await pdfsApi.deleteGroup(g.id); await load(); }
+    catch (e) { alert('Silinə bilmədi: ' + e.message); }
+  }
+
+  const q = query.trim().toLowerCase();
+  function matches(p) {
+    if (!q) return true;
+    return (p.title || '').toLowerCase().includes(q)
+      || (p.subtitle || '').toLowerCase().includes(q);
+  }
+
+  const noResults = !loading && !error && groups.length === 0 && pdfs.length === 0;
 
   return (
     <>
@@ -129,91 +164,105 @@ export default function PdfList({ onBack, onLogout }) {
           <LogOut size={16} /><span>Çıxış</span>
         </button>
       </div>
-<br />
+      <br />
       <div className="home-wrap">
         <LogoFull size="large" />
         <h2 className="home-title">Normativ Sənədlər</h2>
 
         <div className="search-wrap">
           <span className="search-icon"><Search size={18} /></span>
-          <input
-            type="text"
-            placeholder="Ad və ya nömrə ilə axtar"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
-          />
+          <input type="text" placeholder="Ad ilə axtar"
+            value={query} onChange={e => setQuery(e.target.value)} />
         </div>
 
         <div className="process-list">
           {loading && <div className="empty-state"><Loader2 size={20} className="spin" />Yüklənir...</div>}
           {error && !loading && <div className="empty-state error">{error}</div>}
-          {!loading && !error && pdfs.length === 0 && (
-            <div className="empty-state">Heç bir PDF yoxdur</div>
-          )}
+          {noResults && <div className="empty-state">Heç bir qrup yoxdur</div>}
 
-          {(() => {
-            const q = query.trim().toLowerCase();
-            const shown = pdfs
-              .map((p, idx) => ({ p, idx }))
-              .filter(({ p, idx }) => !q || (p.title || '').toLowerCase().includes(q) || String(idx + 1).includes(q));
-            if (!loading && !error && pdfs.length > 0 && shown.length === 0) {
-              return <div className="empty-state">Heç bir nəticə tapılmadı</div>;
-            }
-            return !loading && shown.map(({ p, idx }) => (
-            <div key={p.id} className="process-item pdf-item">
-              <div className="num">{idx + 1}</div>
-              <div className="label">
-                {p.title}
-                {p.size ? <span className="pdf-size">{fmtSize(p.size)}</span> : null}
-              </div>
+          {!loading && !error && groups.map(g => {
+            const items = pdfs.filter(p => Number(p.groupId) === Number(g.id) && matches(p));
+            const total = pdfs.filter(p => Number(p.groupId) === Number(g.id)).length;
+            if (q && items.length === 0) return null;
+            const isOpen = q ? true : !!expanded[g.id];
 
-              <div className="pdf-actions">
-                <button
-                  className="pdf-action-btn"
-                  onClick={() => viewPdf(p)}
-                  disabled={busy === p.id}
-                  title="Bax"
-                >
-                  {busy === p.id ? <Loader2 size={15} className="spin" /> : <Eye size={15} />}
-                  <span>Bax</span>
-                </button>
-                <button
-                  className="pdf-action-btn"
-                  onClick={() => downloadPdf(p)}
-                  disabled={busy === p.id}
-                  title="Yüklə"
-                >
-                  <DownloadIcon size={15} />
-                  <span>Yüklə</span>
-                </button>
+            return (
+              <div key={g.id} className={`group-card ${isOpen ? 'open' : ''}`}>
+                <div className="group-head" onClick={() => toggleGroup(g.id)}>
+                  <span className="group-chevron">
+                    {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                  </span>
+                  <span className="group-folder">
+                    {isOpen ? <FolderOpen size={18} /> : <Folder size={18} />}
+                  </span>
+                  <span className="group-name">{g.name}</span>
+                  <span className="group-count">{total}</span>
 
-                {isAdmin && (
-                  <>
-                    <button
-                      className="pdf-action-btn pdf-action-btn-icon nospace"
-                      onClick={(e) => { e.stopPropagation(); setModal({ mode: 'edit', pdf: p }); }}
-                      title="Redaktə et"
-                    >
-                      <Edit3 size={15} />
-                    </button>
-                    <button
-                      className="pdf-action-btn pdf-action-btn-icon pdf-action-btn-danger"
-                      onClick={(e) => removePdf(e, p)}
-                      title="Sil"
-                    >
-                      <Trash2 size={15} />
-                    </button>
-                  </>
+                  {isAdmin && (
+                    <span className="group-actions" onClick={e => e.stopPropagation()}>
+                      <button className="group-act-btn" title="PDF əlavə et"
+                        onClick={() => setModal({ mode: 'create', defaultGroupId: g.id })}>
+                        <Plus size={16} />
+                      </button>
+                      <button className="group-act-btn" title="Adı dəyiş"
+                        onClick={() => setGmodal({ type: 'rename', group: g })}>
+                        <Pencil size={15} />
+                      </button>
+                      <button className="group-act-btn danger" title="Qrupu sil"
+                        onClick={() => deleteGroup(g)}>
+                        <Trash2 size={15} />
+                      </button>
+                    </span>
+                  )}
+                </div>
+
+                {isOpen && (
+                  <div className="group-body">
+                    {items.length === 0 && <div className="child-empty">Bu qrupda sənəd yoxdur.</div>}
+                    {items.map((p, idx) => (
+                      <div key={p.id} className="process-item pdf-item">
+                        <div className="num">{idx + 1}</div>
+                        <div className="label">
+                          <span className="row-title">
+                            {p.title}
+                            {p.size ? <span className="pdf-size">{fmtSize(p.size)}</span> : null}
+                          </span>
+                          {p.subtitle ? <span className="row-subtitle">{p.subtitle}</span> : null}
+                        </div>
+
+                        <div className="pdf-actions">
+                          <button className="pdf-action-btn" onClick={() => viewPdf(p)} disabled={busy === p.id} title="Bax">
+                            {busy === p.id ? <Loader2 size={15} className="spin" /> : <Eye size={15} />}
+                            <span>Bax</span>
+                          </button>
+                          <button className="pdf-action-btn" onClick={() => downloadPdf(p)} disabled={busy === p.id} title="Yüklə">
+                            <DownloadIcon size={15} /><span>Yüklə</span>
+                          </button>
+                          {isAdmin && (
+                            <>
+                              <button className="pdf-action-btn pdf-action-btn-icon nospace"
+                                onClick={(e) => { e.stopPropagation(); setModal({ mode: 'edit', pdf: p }); }} title="Redaktə et">
+                                <Edit3 size={15} />
+                              </button>
+                              <button className="pdf-action-btn pdf-action-btn-icon pdf-action-btn-danger"
+                                onClick={(e) => removePdf(e, p)} title="Sil">
+                                <Trash2 size={15} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 )}
               </div>
-            </div>
-          ));
-          })()}
+            );
+          })}
 
           {isAdmin && !loading && (
-            <button className="process-item create-btn" onClick={() => setModal({ mode: 'create' })}>
-              <div className="num"><Plus size={22} /></div>
-              <div className="label">PDF əlavə et</div>
+            <button className="process-item create-btn" onClick={() => setGmodal({ type: 'create' })}>
+              <div className="num"><FolderPlus size={20} /></div>
+              <div className="label">Yeni qrup yarat</div>
             </button>
           )}
         </div>
@@ -223,9 +272,19 @@ export default function PdfList({ onBack, onLogout }) {
         <PdfFormModal
           mode={modal.mode}
           pdf={modal.pdf}
+          groups={groups}
+          defaultGroupId={modal.defaultGroupId}
           onClose={() => setModal(null)}
           onSave={handleModalSave}
         />
+      )}
+      {gmodal?.type === 'create' && (
+        <NameModal heading="Yeni qrup" nameLabel="Qrup adı" namePlaceholder="Qrupun adı"
+          saveLabel="Yarat" onClose={() => setGmodal(null)} onSave={saveGroupCreate} />
+      )}
+      {gmodal?.type === 'rename' && (
+        <NameModal heading="Qrupu adlandır" nameLabel="Qrup adı" name0={gmodal.group.name}
+          onClose={() => setGmodal(null)} onSave={saveGroupRename} />
       )}
     </>
   );

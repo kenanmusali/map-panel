@@ -1,10 +1,22 @@
 // AdminPanel.jsx - Fixed with auto-height on drag
 import { useState, useRef } from 'react';
-import { Plus, Trash2, Pill, Square, SquareDashed, Diamond, BoxSelect, GripVertical, Eye, Archive } from './icons.jsx';
+import { Plus, Trash2, Pill, Square, SquareDashed, Diamond, BoxSelect, GripVertical, Eye, Archive, X } from './icons.jsx';
 
-export default function AdminPanel({ process, selection, setSelection, updateProcess }) {
+export default function AdminPanel({ process, selection, setSelection, updateProcess, onClose }) {
   return (
     <aside className="admin-panel">
+      <div className="admin-panel-bar">
+        <span>REDAKTOR</span>
+        {onClose && (
+          <button className="panel-close-btn" onClick={onClose} title="Paneli bağla">
+            <X size={16} />
+          </button>
+        )}
+      </div>
+      <DiagramMetaSection
+        process={process}
+        updateProcess={updateProcess}
+      />
       <PanelsSection
         process={process}
         selection={selection}
@@ -24,6 +36,37 @@ export default function AdminPanel({ process, selection, setSelection, updatePro
       />
       <CanvasSection process={process} updateProcess={updateProcess} />
     </aside>
+  );
+}
+
+/* =====================================================
+   DIAGRAM meta — name + secondary name (label)
+   ===================================================== */
+function DiagramMetaSection({ process, updateProcess }) {
+  return (
+    <section className="panel-section">
+      <header><h3>DİAQRAM</h3></header>
+      <div className="field-row col">
+        <label>Ad</label>
+        <textarea
+          rows={2}
+          value={process.title || ''}
+          onChange={e => updateProcess(p => ({ ...p, title: e.target.value }), 'meta-title')}
+          placeholder="Diaqramın adı"
+        />
+      </div>
+      <div className="field-row col">
+        <label>İkinci ad (etiket)</label>
+        <input
+          value={process.subtitle || ''}
+          onChange={e => updateProcess(p => ({ ...p, subtitle: e.target.value }), 'meta-subtitle')}
+          placeholder="məs. ALM-X1-2-3S"
+        />
+      </div>
+      <div className="hint" style={{ marginTop: '4px' }}>
+        Dəyişikliklər "Yadda saxla" düyməsi ilə qeyd olunur.
+      </div>
+    </section>
   );
 }
 

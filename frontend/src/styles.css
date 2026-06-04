@@ -130,9 +130,18 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.02em; }
 .back-chip:hover { background: var(--bg-soft); }
 .back-chip .label {
   white-space: normal; overflow: hidden;
-  line-height: 1.28; max-height: 2.56em; word-break: break-word;
+  line-height: 1.28; max-height: 2.56em;
+  word-break: normal; overflow-wrap: normal;
   text-align: left;
 }
+/* topbar icons must never shrink when text wraps */
+.topbar svg { flex-shrink: 0; }
+/* button labels (not the diagram name) stay on one line */
+.pill-chip span:not(.label), .logout-btn span, .edit-chip span, .save-chip span {
+  white-space: nowrap;
+}
+.edit-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+.edit-chip.active:hover { background: var(--primary-hover); }
 
 .nospace {
   white-space: nowrap !important;
@@ -841,3 +850,25 @@ details[open] summary::before { transform: rotate(90deg); }
   font-size: 14px; color: var(--text-primary); background: var(--surface);
 }
 .pdf-field select:focus { outline: none; border-color: var(--primary); box-shadow: var(--ring); }
+
+/* ===================== View: fit-to-width ===================== */
+.diagram-container.fit { overflow-x: hidden; overflow-y: auto; }
+.canvas-scale { transform-origin: top left; }
+
+/* ===================== Side panel bar + close ===================== */
+.admin-panel-bar {
+  position: sticky; top: 0; z-index: 3;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 16px;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  font-size: 11px; font-weight: 700; letter-spacing: 0.14em; color: var(--text-muted);
+}
+.panel-close-btn {
+  width: 30px; height: 30px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  background: var(--surface); color: var(--text-secondary);
+  cursor: pointer; transition: all 0.15s var(--ease);
+}
+.panel-close-btn:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }

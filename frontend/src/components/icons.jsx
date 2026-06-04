@@ -27,5 +27,9 @@ export {
   Folder,
   FolderOpen,
   FolderPlus,
-  Pencil
+  Pencil,
+  Maximize2,
+  Minimize2,
+  PanelRight,
+  PanelRightOpen
 } from 'lucide-react';

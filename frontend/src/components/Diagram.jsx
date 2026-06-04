@@ -1,7 +1,8 @@
 // Diagram.jsx
 import { useState, useEffect, useCallback, useRef } from 'react';
 import {
-  ChevronLeft, LogOut, Edit3, Eye, Save, Loader2, CheckCircle2, AlertCircle, Undo2, Redo2
+  ChevronLeft, LogOut, Edit3, Eye, Save, Loader2, CheckCircle2, AlertCircle, Undo2, Redo2,
+  Maximize2, Minimize2, PanelRight, PanelRightOpen, X
 } from './icons.jsx';
 import { LogoFull } from './Logo.jsx';
 import { api, setToken } from '../api/client.js';
@@ -88,6 +89,14 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
 
+  // View: fit-to-width (no horizontal scroll) vs classic (native size)
+  const [fitWidth, setFitWidth] = useState(false);
+  // Side panel open/close (edit mode)
+  const [panelOpen, setPanelOpen] = useState(true);
+  // Live width of the diagram container, for fit-to-width scaling
+  const [containerW, setContainerW] = useState(0);
+  const containerRef = useRef(null);
+
   const [hasDraft, setHasDraft] = useState(false);
   const [serverProcess, setServerProcess] = useState(null);
   const [modalAnchorRect, setModalAnchorRect] = useState(null);
@@ -96,6 +105,17 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
   const dirtyRef = useRef(dirty);
   useEffect(() => { processRef.current = process; }, [process]);
   useEffect(() => { dirtyRef.current = dirty; }, [dirty]);
+
+  // Track the diagram container width so fit-to-width can scale correctly
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => setContainerW(el.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [editMode, panelOpen, loading]);
 
   // ---- Undo / redo history ----
   const historyRef = useRef([]);   // array of process snapshots
@@ -406,6 +426,28 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
         <LogoFull />
 
         <div className="top-right">
+          {!editMode && (
+            <button
+              className={`pill-chip edit-chip nospace ${fitWidth ? 'active' : ''}`}
+              onClick={() => setFitWidth(v => !v)}
+              title={fitWidth ? 'Klassik görünüş' : 'Tam en (ekrana sığdır)'}
+            >
+              {fitWidth ? <Minimize2 size={16} /> : <Maximize2 size={16} />}
+              <span>{fitWidth ? 'Klassik' : 'Tam en'}</span>
+            </button>
+          )}
+
+          {!isViewer && editMode && !panelOpen && (
+            <button
+              className="pill-chip edit-chip nospace"
+              onClick={() => setPanelOpen(true)}
+              title="Paneli aç"
+            >
+              <PanelRightOpen size={16} />
+              <span>Panel</span>
+            </button>
+          )}
+
           {!isViewer && editMode && (
             <div className="history-group">
               <button
@@ -469,35 +511,56 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
 
       <div className={`diagram-wrap ${editMode ? 'edit-mode' : ''}`}>
         <div className="diagram-main">
-          <div className="diagram-container">
+          <div
+            className={`diagram-container ${fitWidth && !editMode ? 'fit' : ''}`}
+            ref={containerRef}
+          >
             {loading && (
               <div className="empty-state"><Loader2 size={20} className="spin" />Yüklənir...</div>
             )}
             {error && !loading && (
               <div className="empty-state error">{error}</div>
             )}
-            {!loading && !error && process && (
-              <DiagramCanvas
-                process={process}
-                selectedNodeId={editMode && selection?.kind === 'node' ? selection.id : null}
-                modalNodeId={!editMode && selection?.kind === 'node' ? selection.id : null}
-                editMode={!isViewer && editMode}
-                onNodeClick={onNodeClick}
-                onLaneClick={onLaneClick}
-                onNodeMove={onNodeMove}
-                onNodeMoveEnd={onNodeMoveEnd}
-                onCreateEdge={onCreateEdge}
-              />
-            )}
+            {!loading && !error && process && (() => {
+              const pad = 32; // container padding (16 each side)
+              const avail = Math.max(0, containerW - pad);
+              const scale = (fitWidth && !editMode && process.width && avail)
+                ? Math.min(1, avail / process.width)
+                : 1;
+              const wrapStyle = scale < 1
+                ? {
+                    width: process.width,
+                    height: (process.height || 0) * scale,
+                    transform: `scale(${scale})`,
+                    transformOrigin: 'top left'
+                  }
+                : undefined;
+              return (
+                <div className="canvas-scale" style={wrapStyle}>
+                  <DiagramCanvas
+                    process={process}
+                    selectedNodeId={editMode && selection?.kind === 'node' ? selection.id : null}
+                    modalNodeId={!editMode && selection?.kind === 'node' ? selection.id : null}
+                    editMode={!isViewer && editMode}
+                    onNodeClick={onNodeClick}
+                    onLaneClick={onLaneClick}
+                    onNodeMove={onNodeMove}
+                    onNodeMoveEnd={onNodeMoveEnd}
+                    onCreateEdge={onCreateEdge}
+                  />
+                </div>
+              );
+            })()}
           </div>
         </div>
 
-        {!isViewer && editMode && process && (
+        {!isViewer && editMode && panelOpen && process && (
           <AdminPanel
             process={process}
             selection={selection}
             setSelection={setSelection}
             updateProcess={updateProcess}
+            onClose={() => setPanelOpen(false)}
           />
         )}
       </div>

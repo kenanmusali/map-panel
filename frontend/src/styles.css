@@ -872,3 +872,18 @@ details[open] summary::before { transform: rotate(90deg); }
   cursor: pointer; transition: all 0.15s var(--ease);
 }
 .panel-close-btn:hover { border-color: var(--danger); color: var(--danger); background: var(--danger-soft); }
+
+/* ===================== Editable titles ===================== */
+.title-edit-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; margin-left: 8px; vertical-align: middle;
+  border: 1px solid var(--border); border-radius: var(--r-sm);
+  background: var(--surface); color: var(--text-secondary);
+  cursor: pointer; transition: all 0.15s var(--ease);
+}
+.title-edit-btn:hover { border-color: var(--primary); color: var(--primary); background: var(--surface-soft); }
+
+.tile-wrap { position: relative; display: flex; }
+.tile-wrap .section-tile { flex: 1; }
+.tile-edit { position: absolute; top: 10px; right: 10px; z-index: 2; }
+.tile-edit .title-edit-btn { margin-left: 0; background: var(--surface-soft); }

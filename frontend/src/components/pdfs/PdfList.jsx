@@ -4,10 +4,11 @@ import {
   ChevronLeft, ChevronRight, ChevronDown, LogOut, Plus, Loader2, Trash2,
   Eye, Edit3, Search, Folder, FolderOpen, FolderPlus, Pencil
 } from '../icons.jsx';
-import { setToken } from '../../api/client.js';
+import { api, setToken } from '../../api/client.js';
 import { pdfsApi } from '../../api/pdfsClient.js';
 import PdfFormModal from './PdfFormModal.jsx';
 import NameModal from '../NameModal.jsx';
+import TitleEditButton from '../TitleEditButton.jsx';
 
 function fmtTime(d) {
   const h = d.getHours();
@@ -49,6 +50,7 @@ export default function PdfList({ onBack, onLogout }) {
   const [expanded, setExpanded] = useState({});
   const [modal, setModal] = useState(null); // pdf modal: {mode, pdf?, defaultGroupId?}
   const [gmodal, setGmodal] = useState(null); // group modal: {type:'create'|'rename', group?}
+  const [settings, setSettings] = useState(null);
 
   const role = localStorage.getItem('role');
   const isAdmin = role === 'admin';
@@ -59,6 +61,12 @@ export default function PdfList({ onBack, onLogout }) {
   }, []);
 
   useEffect(() => { load(); }, []);
+  useEffect(() => { api.getSettings().then(setSettings).catch(() => setSettings({})); }, []);
+
+  async function saveSettings(patch) {
+    const next = await api.updateSettings(patch);
+    setSettings(next);
+  }
 
   async function load() {
     setLoading(true);
@@ -167,7 +175,17 @@ export default function PdfList({ onBack, onLogout }) {
       <br />
       <div className="home-wrap">
         <LogoFull size="large" />
-        <h2 className="home-title">Normativ Sənədlər</h2>
+        <h2 className="home-title">
+          {(settings?.pdf_page_title) || 'Normativ Sənədlər'}
+          {isAdmin && settings && (
+            <TitleEditButton
+              heading="Başlığı dəyiş"
+              nameLabel="Səhifə başlığı"
+              name0={(settings?.pdf_page_title) || 'Normativ Sənədlər'}
+              onSave={({ name }) => saveSettings({ pdf_page_title: name })}
+            />
+          )}
+        </h2>
 
         <div className="search-wrap">
           <span className="search-icon"><Search size={18} /></span>

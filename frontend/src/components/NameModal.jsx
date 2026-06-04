@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { X, Loader2 } from './icons.jsx';
 
-// Generic modal: heading + name field (+ optional subtitle field).
-// onSave({ name, subtitle }) may be async.
+// Generic modal: heading + name field (+ optional subtitle + optional group select).
+// onSave({ name, subtitle, groupId }) may be async.
 export default function NameModal({
   heading,
   nameLabel = 'Ad',
@@ -10,6 +10,9 @@ export default function NameModal({
   subtitleLabel = 'İkinci ad (qısa)',
   subtitlePlaceholder = '',
   withSubtitle = false,
+  withGroup = false,
+  groups = [],
+  groupId0 = null,
   name0 = '',
   subtitle0 = '',
   saveLabel = 'Saxla',
@@ -18,16 +21,22 @@ export default function NameModal({
 }) {
   const [name, setName] = useState(name0);
   const [subtitle, setSubtitle] = useState(subtitle0);
+  const [groupId, setGroupId] = useState(groupId0 ?? (groups[0]?.id ?? null));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
 
   async function submit(e) {
     e.preventDefault();
     if (!name.trim()) { setError('Ad daxil edin'); return; }
+    if (withGroup && !groupId) { setError('Qrup seçin'); return; }
     setSaving(true);
     setError('');
     try {
-      await onSave({ name: name.trim(), subtitle: subtitle.trim() });
+      await onSave({
+        name: name.trim(),
+        subtitle: subtitle.trim(),
+        groupId: withGroup ? Number(groupId) : undefined
+      });
     } catch (err) {
       setError(err.message || 'Xəta');
       setSaving(false);
@@ -65,6 +74,16 @@ export default function NameModal({
                 onChange={(e) => setSubtitle(e.target.value)}
                 placeholder={subtitlePlaceholder}
               />
+            </div>
+          )}
+
+          {withGroup && (
+            <div className="pdf-field">
+              <label>Qrup</label>
+              <select value={groupId || ''} onChange={(e) => setGroupId(e.target.value)}>
+                {groups.length === 0 && <option value="">Qrup yoxdur</option>}
+                {groups.map(g => <option key={g.id} value={g.id}>{g.name}</option>)}
+              </select>
             </div>
           )}
 

@@ -57,5 +57,9 @@ export const api = {
   // Diagram groups
   createGroup: (name) => request('POST', '/api/processes/group', { name }),
   renameGroup: (gid, name) => request('PUT', `/api/processes/group/${gid}`, { name }),
-  deleteGroup: (gid) => request('DELETE', `/api/processes/group/${gid}`)
+  deleteGroup: (gid) => request('DELETE', `/api/processes/group/${gid}`),
+
+  // Settings (editable section titles)
+  getSettings: () => request('GET', '/api/settings'),
+  updateSettings: (patch) => request('PUT', '/api/settings', patch)
 };

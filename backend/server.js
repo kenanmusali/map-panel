@@ -5,6 +5,7 @@ import cors from 'cors';
 import authRouter, { requireAuth } from './routes/auth.js';
 import processesRouter from './routes/processes.js';
 import pdfsRouter from './routes/pdfs.js';
+import settingsRouter from './routes/settings.js';
 import { diagnose } from './services/github.js';
 
 const app = express();
@@ -61,6 +62,7 @@ app.use(['/api', '/'], authRouter);
 // PROTECTED ROUTES
 app.use(['/api/processes', '/processes'], requireAuth, processesRouter);
 app.use(['/api/pdfs', '/pdfs'], requireAuth, pdfsRouter);
+app.use(['/api/settings', '/settings'], requireAuth, settingsRouter);
 
 // 404 — show the URL Express actually saw, so we can debug from Vercel logs
 app.use((req, res) => {

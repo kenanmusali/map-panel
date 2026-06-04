@@ -6,6 +6,7 @@ import {
 } from './icons.jsx';
 import { api, setToken } from '../api/client.js';
 import NameModal from './NameModal.jsx';
+import TitleEditButton from './TitleEditButton.jsx';
 
 function fmtTime(d) {
   const h = d.getHours();
@@ -30,9 +31,11 @@ export default function Home({ onOpen, onLogout, onBack }) {
   const [expanded, setExpanded] = useState({});   // groupId -> bool
   const [modal, setModal] = useState(null);        // see types below
   const [busy, setBusy] = useState(false);
+  const [settings, setSettings] = useState(null);
 
   const role = localStorage.getItem('role');
   const isViewer = role === 'viewer';
+  const isAdmin = role === 'admin';
 
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
@@ -40,6 +43,12 @@ export default function Home({ onOpen, onLogout, onBack }) {
   }, []);
 
   useEffect(() => { load(); }, []);
+  useEffect(() => { api.getSettings().then(setSettings).catch(() => setSettings({})); }, []);
+
+  async function saveSettings(patch) {
+    const next = await api.updateSettings(patch);
+    setSettings(next);
+  }
 
   async function load() {
     setLoading(true);
@@ -100,11 +109,11 @@ export default function Home({ onOpen, onLogout, onBack }) {
   }
 
   /* ---------- diagram actions ---------- */
-  async function saveDiagramCreate({ name, subtitle }) {
+  async function saveDiagramCreate({ name, subtitle, groupId }) {
     setBusy(true);
     try {
       const p = await api.createProcess({
-        title: name, subtitle, groupId: modal.groupId,
+        title: name, subtitle, groupId: groupId || modal.groupId,
         width: 2200, height: 900, lanes: [], nodes: [], edges: []
       });
       setModal(null);
@@ -114,8 +123,8 @@ export default function Home({ onOpen, onLogout, onBack }) {
       alert('Xəta: ' + e.message);
     } finally { setBusy(false); }
   }
-  async function saveDiagramEdit({ name, subtitle }) {
-    await api.updateProcessMeta(modal.proc.id, { title: name, subtitle });
+  async function saveDiagramEdit({ name, subtitle, groupId }) {
+    await api.updateProcessMeta(modal.proc.id, { title: name, subtitle, groupId });
     setModal(null);
     await load();
   }
@@ -158,7 +167,16 @@ export default function Home({ onOpen, onLogout, onBack }) {
       <div className="home-wrap">
         <LogoFull size="large" />
         <h2 className="home-title">
-          ABŞERON LOGİSTİKA MƏRKƏZİ<br />Iş Axışları
+          {(settings?.org_title) || 'ABŞERON LOGİSTİKA MƏRKƏZİ'}<br />
+          {(settings?.diagrams_page_title) || 'İş Axışları'}
+          {isAdmin && settings && (
+            <TitleEditButton
+              heading="Başlığı dəyiş"
+              nameLabel="Səhifə başlığı"
+              name0={(settings?.diagrams_page_title) || 'İş Axışları'}
+              onSave={({ name }) => saveSettings({ diagrams_page_title: name })}
+            />
+          )}
         </h2>
 
         <div className="search-wrap">
@@ -264,11 +282,13 @@ export default function Home({ onOpen, onLogout, onBack }) {
       )}
       {modal?.type === 'diagram-create' && (
         <NameModal heading="Yeni diaqram" nameLabel="Diaqram adı" withSubtitle
+          withGroup groups={groups} groupId0={modal.groupId}
           namePlaceholder="Əsas ad" subtitlePlaceholder="Qısa ikinci ad (məcburi deyil)"
           saveLabel="Yarat və aç" onClose={() => setModal(null)} onSave={saveDiagramCreate} />
       )}
       {modal?.type === 'diagram-edit' && (
         <NameModal heading="Diaqramı redaktə et" nameLabel="Diaqram adı" withSubtitle
+          withGroup groups={groups} groupId0={modal.proc.groupId}
           name0={modal.proc.title || ''} subtitle0={modal.proc.subtitle || ''}
           onClose={() => setModal(null)} onSave={saveDiagramEdit} />
       )}

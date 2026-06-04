@@ -1,6 +1,6 @@
 {
   "id": 4,
-  "title": "test renamed",
+  "title": "test",
   "width": 2200,
   "height": 900,
   "lanes": [
@@ -88,5 +88,5 @@
       "dashed": false
     }
   ],
-  "subtitle": "alt ad"
+  "subtitle": ""
 }

@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { LogoFull } from './Logo.jsx';
 import { LogOut } from './icons.jsx';
-import { setToken } from '../api/client.js';
+import { api, setToken } from '../api/client.js';
+import TitleEditButton from './TitleEditButton.jsx';
 
 function fmtTime(d) {
   const h = d.getHours();
@@ -45,10 +46,26 @@ function FileTileIcon_REMOVED() { return null; }
 
 export default function SectionsHub({ onPick, onLogout }) {
   const [now, setNow] = useState(new Date());
+  const [settings, setSettings] = useState(null);
+  const role = localStorage.getItem('role');
+  const isAdmin = role === 'admin';
+
   useEffect(() => {
     const t = setInterval(() => setNow(new Date()), 1000);
     return () => clearInterval(t);
   }, []);
+
+  useEffect(() => {
+    api.getSettings().then(setSettings).catch(() => setSettings({}));
+  }, []);
+
+  const s = settings || {};
+  const t = (k, d) => (s[k] != null ? s[k] : d);
+
+  async function saveSettings(patch) {
+    const next = await api.updateSettings(patch);
+    setSettings(next);
+  }
 
   function logout() {
     setToken(null);
@@ -72,21 +89,59 @@ export default function SectionsHub({ onPick, onLogout }) {
       <div className="home-wrap">
         <LogoFull size="large" />
         <h2 className="home-title">
-          ABŞERON LOGİSTİKA MƏRKƏZİ<br />
+          {t('org_title', 'ABŞERON LOGİSTİKA MƏRKƏZİ')}
+          {isAdmin && settings && (
+            <TitleEditButton
+              heading="Başlığı dəyiş"
+              nameLabel="Təşkilat adı"
+              name0={t('org_title', 'ABŞERON LOGİSTİKA MƏRKƏZİ')}
+              onSave={({ name }) => saveSettings({ org_title: name })}
+            />
+          )}
         </h2>
 
         <div className="sections-grid">
-          <button className="section-tile" onClick={() => onPick('diagrams')}>
-            <div className="section-tile-icon"><DiagramTileIcon /></div>
-            <div className="section-tile-title">İş Axışları</div>
-            <div className="section-tile-sub">Proses xəritələri</div>
-          </button>
+          <div className="tile-wrap">
+            <button className="section-tile" onClick={() => onPick('diagrams')}>
+              <div className="section-tile-icon"><DiagramTileIcon /></div>
+              <div className="section-tile-title">{t('hub_diagrams_title', 'İş Axışları')}</div>
+              <div className="section-tile-sub">{t('hub_diagrams_sub', 'Proses xəritələri')}</div>
+            </button>
+            {isAdmin && settings && (
+              <div className="tile-edit">
+                <TitleEditButton
+                  heading="Bölmə adını dəyiş"
+                  nameLabel="Başlıq"
+                  name0={t('hub_diagrams_title', 'İş Axışları')}
+                  withSubtitle subtitleLabel="Alt yazı"
+                  subtitle0={t('hub_diagrams_sub', 'Proses xəritələri')}
+                  onSave={({ name, subtitle }) =>
+                    saveSettings({ hub_diagrams_title: name, hub_diagrams_sub: subtitle })}
+                />
+              </div>
+            )}
+          </div>
 
-          <button className="section-tile" onClick={() => onPick('pdfs')}>
-            <div className="section-tile-icon"><PdfTileIcon /></div>
-            <div className="section-tile-title">Normativ Sənədlər</div>
-            <div className="section-tile-sub">Prosedurlar, prosesler, əsəsnamələr</div>
-          </button>
+          <div className="tile-wrap">
+            <button className="section-tile" onClick={() => onPick('pdfs')}>
+              <div className="section-tile-icon"><PdfTileIcon /></div>
+              <div className="section-tile-title">{t('hub_pdf_title', 'Normativ Sənədlər')}</div>
+              <div className="section-tile-sub">{t('hub_pdf_sub', 'Prosedurlar, prosesler, əsəsnamələr')}</div>
+            </button>
+            {isAdmin && settings && (
+              <div className="tile-edit">
+                <TitleEditButton
+                  heading="Bölmə adını dəyiş"
+                  nameLabel="Başlıq"
+                  name0={t('hub_pdf_title', 'Normativ Sənədlər')}
+                  withSubtitle subtitleLabel="Alt yazı"
+                  subtitle0={t('hub_pdf_sub', 'Prosedurlar, prosesler, əsəsnamələr')}
+                  onSave={({ name, subtitle }) =>
+                    saveSettings({ hub_pdf_title: name, hub_pdf_sub: subtitle })}
+                />
+              </div>
+            )}
+          </div>
         </div>
       </div>
     </>

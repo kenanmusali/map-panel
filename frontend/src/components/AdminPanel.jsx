@@ -1,6 +1,7 @@
 // AdminPanel.jsx - Fixed with auto-height on drag
 import { useState, useRef } from 'react';
-import { Plus, Trash2, Pill, Square, SquareDashed, Diamond, BoxSelect, Shapes, GripVertical, Eye, Archive, X } from './icons.jsx';
+import { Plus, Trash2, Pill, Square, Diamond, Shapes, GripVertical, Eye, Archive, X } from './icons.jsx';
+import { SHAPES, STYLES, SHAPE_LABEL, STYLE_LABEL, nodeView, nodeDefaults } from './nodeStyle.js';
 
 export default function AdminPanel({ process, selection, setSelection, updateProcess, onClose }) {
   return (
@@ -277,7 +278,7 @@ function PanelsSection({ process, selection, setSelection, updateProcess }) {
    ===================================================== */
 function NodesSection({ process, setSelection, updateProcess }) {
   const [targetLane, setTargetLane] = useState(0);
-  const [dashMode, setDashMode] = useState(false); // border style for new shape nodes
+  const [style, setStyle] = useState('solid'); // Tam | Stroke | Kəsik for the new node
 
   function nextNodeId() {
     const used = process.nodes.map(n => n.id);
@@ -286,12 +287,12 @@ function NodesSection({ process, setSelection, updateProcess }) {
     return n;
   }
 
-  function addNode(type) {
+  function addNode(shape) {
     if (process.lanes.length === 0) { alert('Əvvəlcə bir panel əlavə edin.'); return; }
     const lane = process.lanes[Math.min(targetLane, process.lanes.length - 1)];
     const id = nextNodeId();
-    const defaults = nodeDefaults(type);
-    
+    const defaults = nodeDefaults(shape);
+
     // Vertical stacking - find bottommost node in this lane
     const laneNodes = process.nodes.filter(n => n.laneId === lane.id);
     let y = lane.y + 20;
@@ -299,24 +300,19 @@ function NodesSection({ process, setSelection, updateProcess }) {
       const maxBottom = Math.max(...laneNodes.map(n => (n.y || 0) + (n.h || 100)));
       y = maxBottom + 20;
     }
-    
-    const labelByType = {
+
+    const labelByShape = {
       pill: 'başlanğıc/son',
       rect: 'addım',
-      stroke: 'alt-addım',
       diamond: 'qərar',
       parallelogram: 'məlumat/giriş',
-      dashed: 'alt-addım (kəsik)'
     };
-    // Border style (solid/dashed) is a per-node option for the filled shapes.
-    const supportsDash = ['pill', 'rect', 'diamond', 'parallelogram'].includes(type);
     const node = {
-      id, type, x: lane.y + 80, y, laneId: lane.id, ...defaults,
-      ...(supportsDash && dashMode ? { dash: true } : {}),
-      text: `Yeni ${labelByType[type] || 'addım'}`,
+      id, type: shape, style, x: lane.y + 80, y, laneId: lane.id, ...defaults,
+      text: `Yeni ${labelByShape[shape] || 'addım'}`,
       info: { general: [''], risks: [''] }
     };
-    
+
     updateProcess(p => {
       const newNodes = [...p.nodes, node];
       const repackedLanes = repackLanes(p.lanes, newNodes);
@@ -324,6 +320,12 @@ function NodesSection({ process, setSelection, updateProcess }) {
     });
     setSelection({ kind: 'node', id });
   }
+
+  const SHAPE_ICON = { pill: Pill, rect: Square, diamond: Diamond, parallelogram: Shapes };
+  const SHAPE_HINT = {
+    pill: 'Başlanğıc/son', rect: 'Normal addım',
+    diamond: 'Qərar (4 ox)', parallelogram: 'Məlumat/giriş',
+  };
 
   return (
     <section className="panel-section">
@@ -337,53 +339,29 @@ function NodesSection({ process, setSelection, updateProcess }) {
           }
         </select>
       </div>
-      <div className="field-row">
+      <div className="field-row col">
         <label className="lbl">Sərhəd:</label>
         <div className="seg-toggle">
-          <button type="button" className={!dashMode ? 'on' : ''} onClick={() => setDashMode(false)}>Tam</button>
-          <button type="button" className={dashMode ? 'on' : ''} onClick={() => setDashMode(true)}>Kəsik</button>
+          {STYLES.map(s => (
+            <button key={s} type="button" className={style === s ? 'on' : ''} onClick={() => setStyle(s)}>
+              {STYLE_LABEL[s]}
+            </button>
+          ))}
         </div>
       </div>
       <div className="node-types">
-        <button className="type-btn" onClick={() => addNode('pill')}>
-          <div className="type-preview pill"><Pill size={14} /></div>
-          <span>Pill</span><small>Başlanğıc/son</small>
-        </button>
-        <button className="type-btn" onClick={() => addNode('rect')}>
-          <div className="type-preview rect"><Square size={14} /></div>
-          <span>Rect</span><small>Normal addım</small>
-        </button>
-        <button className="type-btn" onClick={() => addNode('diamond')}>
-          <div className="type-preview diamond"><Diamond size={14} /></div>
-          <span>Romb</span><small>Qərar (4 ox)</small>
-        </button>
-        <button className="type-btn" onClick={() => addNode('parallelogram')}>
-          <div className="type-preview parallelogram"><Shapes size={14} /></div>
-          <span>Parallel</span><small>Məlumat/giriş</small>
-        </button>
-        <button className="type-btn" onClick={() => addNode('stroke')}>
-          <div className="type-preview stroke"><SquareDashed size={14} /></div>
-          <span>Stroke</span><small>Alt-addım</small>
-        </button>
-        <button className="type-btn" onClick={() => addNode('dashed')}>
-          <div className="type-preview dashed"><BoxSelect size={14} /></div>
-          <span>Kəsik</span><small>Kəsik sərhəd</small>
-        </button>
+        {SHAPES.map(shape => {
+          const Icon = SHAPE_ICON[shape];
+          return (
+            <button key={shape} className="type-btn" onClick={() => addNode(shape)}>
+              <div className={`type-preview ${shape} s-${style}`}><Icon size={14} /></div>
+              <span>{SHAPE_LABEL[shape]}</span><small>{SHAPE_HINT[shape]}</small>
+            </button>
+          );
+        })}
       </div>
     </section>
   );
-}
-
-function nodeDefaults(type) {
-  switch (type) {
-    case 'pill': return { w: 200, h: 50 };
-    case 'rect': return { w: 200, h: 70 };
-    case 'stroke': return { w: 220, h: 60 };
-    case 'diamond': return { w: 150, h: 150 };
-    case 'parallelogram': return { w: 210, h: 70 };
-    case 'dashed': return { w: 220, h: 60 };
-    default: return { w: 200, h: 70 };
-  }
 }
 
 /* =====================================================
@@ -483,6 +461,7 @@ function LaneEditor({ lane, laneIndex, process, updateProcess, onDelete }) {
    ===================================================== */
 function NodeEditor({ node, process, updateProcess, onDelete }) {
   const [showPreview, setShowPreview] = useState(false);
+  const { shape, style } = nodeView(node);
 
   function patch(field, value) {
     updateProcess(p => {
@@ -490,6 +469,20 @@ function NodeEditor({ node, process, updateProcess, onDelete }) {
       const repacked = repackLanes(p.lanes, newNodes);
       return { ...p, nodes: newNodes, lanes: repacked };
     }, `node-${node.id}-${field}`);
+  }
+
+  // Write shape + style together (and clear any legacy `dash`) so editing a
+  // legacy node never silently drops its border style.
+  function setShapeStyle(nextShape, nextStyle) {
+    updateProcess(p => {
+      const newNodes = p.nodes.map(n =>
+        String(n.id) === String(node.id)
+          ? { ...n, type: nextShape, style: nextStyle, dash: undefined }
+          : n
+      );
+      const repacked = repackLanes(p.lanes, newNodes);
+      return { ...p, nodes: newNodes, lanes: repacked };
+    }, `node-${node.id}-shapestyle`);
   }
 
   function patchInfo(field, value) {
@@ -527,7 +520,7 @@ function NodeEditor({ node, process, updateProcess, onDelete }) {
     <section className="panel-section">
       <header>
         <h3>NODE #{node.id}</h3>
-        <span className={`type-badge ${node.type}`}>{node.type}</span>
+        <span className={`type-badge ${shape} s-${style}`}>{SHAPE_LABEL[shape]} · {STYLE_LABEL[style]}</span>
       </header>
 
       <div className="field-row two">
@@ -536,27 +529,23 @@ function NodeEditor({ node, process, updateProcess, onDelete }) {
           <input defaultValue={node.id} onBlur={e => changeId(e.target.value)} />
         </div>
         <div>
-          <label>Tip</label>
-          <select value={node.type} onChange={e => patch('type', e.target.value)}>
-            <option value="pill">Pill</option>
-            <option value="rect">Rect</option>
-            <option value="diamond">Romb</option>
-            <option value="parallelogram">Parallel</option>
-            <option value="stroke">Stroke</option>
-            <option value="dashed">Kəsik</option>
+          <label>Forma</label>
+          <select value={shape} onChange={e => setShapeStyle(e.target.value, style)}>
+            {SHAPES.map(s => <option key={s} value={s}>{SHAPE_LABEL[s]}</option>)}
           </select>
         </div>
       </div>
 
-      {['pill', 'rect', 'diamond', 'parallelogram'].includes(node.type) && (
-        <div className="field-row col">
-          <label>Sərhəd stili</label>
-          <div className="seg-toggle">
-            <button type="button" className={!node.dash ? 'on' : ''} onClick={() => patch('dash', false)}>Tam</button>
-            <button type="button" className={node.dash ? 'on' : ''} onClick={() => patch('dash', true)}>Kəsik (xətli)</button>
-          </div>
+      <div className="field-row col">
+        <label>Sərhəd stili</label>
+        <div className="seg-toggle">
+          {STYLES.map(s => (
+            <button key={s} type="button" className={style === s ? 'on' : ''} onClick={() => setShapeStyle(shape, s)}>
+              {STYLE_LABEL[s]}
+            </button>
+          ))}
         </div>
-      )}
+      </div>
 
       <div className="field-row col">
         <label>Mətn</label>

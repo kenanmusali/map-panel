@@ -100,6 +100,47 @@ router.delete('/group/:gid', requireAdmin, async (req, res, next) => {
   } catch (e) { next(e); }
 });
 
+/* =========================== REORDER =========================== */
+// Reorder the folders (groups). body: { order: [gid, ...] }
+router.put('/groups/reorder', requireAdmin, async (req, res, next) => {
+  try {
+    const order = Array.isArray(req.body?.order) ? req.body.order.map(Number) : null;
+    if (!order) return res.status(400).json({ error: 'order array required' });
+    const idx = await readIndex();
+    const byId = new Map(idx.groups.map(g => [Number(g.id), g]));
+    const reordered = [];
+    for (const id of order) {
+      if (byId.has(id)) { reordered.push(byId.get(id)); byId.delete(id); }
+    }
+    for (const g of byId.values()) reordered.push(g);
+    idx.groups = reordered;
+    await writeIndex(idx, 'Reorder pdf groups');
+    res.json({ groups: idx.groups });
+  } catch (e) { next(e); }
+});
+
+// Reorder PDFs inside one folder. body: { groupId, order: [pid, ...] }
+// Must be declared before '/:id' so "reorder" isn't read as an id.
+router.put('/reorder', requireAdmin, async (req, res, next) => {
+  try {
+    const groupId = Number(req.body?.groupId);
+    const order = Array.isArray(req.body?.order) ? req.body.order.map(Number) : null;
+    if (!groupId || !order) return res.status(400).json({ error: 'groupId and order required' });
+    const idx = await readIndex();
+    const groupItems = idx.pdfs.filter(p => Number(p.groupId) === groupId);
+    const byId = new Map(groupItems.map(p => [Number(p.id), p]));
+    const seq = [];
+    for (const id of order) {
+      if (byId.has(id)) { seq.push(byId.get(id)); byId.delete(id); }
+    }
+    for (const p of byId.values()) seq.push(p);
+    let k = 0;
+    idx.pdfs = idx.pdfs.map(p => Number(p.groupId) === groupId ? seq[k++] : p);
+    await writeIndex(idx, `Reorder pdfs in group ${groupId}`);
+    res.json({ pdfs: idx.pdfs });
+  } catch (e) { next(e); }
+});
+
 /* =========================== PDF FILE STREAM =========================== */
 router.get('/:id/file', async (req, res, next) => {
   try {

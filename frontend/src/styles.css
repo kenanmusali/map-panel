@@ -463,55 +463,76 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.02em; }
 .node.pill .text { font-weight: 600; }
 .node.rect .num, .node.pill .num, .node.diamond .num { font-size: 13px; color: #fff; opacity: 0.85; min-width: 16px; }
 
-/* stroke + dashed */
-.node.stroke, .node.dashed {
+/* ============================================================
+   BORDER STYLES — solid (Tam) / stroke / dashed (Kəsik)
+   solid  = filled --primary background, white text (base .node)
+   stroke = white background, SOLID border, dark text
+   dashed = white background, DASHED border, dark text
+   ============================================================ */
+.node.pill.s-stroke, .node.pill.s-dashed,
+.node.rect.s-stroke, .node.rect.s-dashed {
   background: var(--stroke-bg); color: var(--text-primary);
   border: 2px solid var(--stroke-border); box-shadow: var(--sh-xs);
 }
-.node.dashed { border-style: dashed; }
-.node.stroke:hover, .node.dashed:hover { border-color: var(--primary); background: var(--surface-soft); }
-.node.stroke.selected, .node.dashed.selected {
+.node.pill.s-dashed, .node.rect.s-dashed { border-style: dashed; }
+.node.pill.s-stroke .num, .node.pill.s-dashed .num,
+.node.rect.s-stroke .num, .node.rect.s-dashed .num { color: var(--stroke-border); }
+.node.pill.s-stroke:hover, .node.pill.s-dashed:hover,
+.node.rect.s-stroke:hover, .node.rect.s-dashed:hover {
+  border-color: var(--primary); background: var(--surface-soft);
+}
+.node.pill.s-stroke.selected, .node.pill.s-dashed.selected,
+.node.rect.s-stroke.selected, .node.rect.s-dashed.selected {
   border-color: var(--primary-darker); color: var(--primary-darker);
   box-shadow: 0 0 0 2.5px var(--surface), 0 0 0 5px var(--primary);
 }
-.node.stroke .num, .node.dashed .num { font-size: 26px; color: var(--stroke-border); font-weight: 800; min-width: 44px; }
-
-/* dashed ("kəsik") border option for the filled shapes */
-.node.pill.dash, .node.rect.dash {
-  border: 2px dashed rgba(255,255,255,0.8);
-}
-.node.stroke.dash { border-style: dashed; }
 
 /* SVG-bodied shapes: diamond (romb) + parallelogram */
 .node.diamond, .node.parallelogram {
   background: transparent; border: none; box-shadow: none;
   justify-content: center; text-align: center; padding: 10px;
 }
-.node.diamond::before { content: none; } /* legacy clip-path body removed */
+.node.diamond::before { content: none; }
 .shape-svg {
   position: absolute; inset: 0; width: 100%; height: 100%;
   z-index: 0; overflow: visible; pointer-events: none;
 }
-.shape-fill {
-  fill: var(--primary); stroke: transparent; stroke-width: 0;
-  filter: drop-shadow(0 4px 12px rgba(28,75,100,0.14));
-  transition: fill 0.2s var(--ease);
-}
-.node.dash .shape-fill { stroke: rgba(255,255,255,0.85); stroke-width: 2; }
-.node.diamond:hover .shape-fill,
-.node.parallelogram:hover .shape-fill { fill: var(--primary-hover); }
-.node.diamond.selected .shape-fill,
-.node.parallelogram.selected .shape-fill { fill: var(--primary-darker); }
-.node.diamond.dimmed .shape-fill,
-.node.parallelogram.dimmed .shape-fill { fill: var(--primary-light); }
 .node.diamond .num, .node.diamond .text,
 .node.parallelogram .num, .node.parallelogram .text { position: relative; z-index: 1; }
 .node.diamond .text, .node.parallelogram .text { flex: 0 1 auto; }
 .node.parallelogram .num { font-size: 13px; color: #fff; opacity: 0.85; min-width: 16px; }
 .node.diamond.selected, .node.parallelogram.selected { box-shadow: none; }
 .node.diamond.link-target, .node.parallelogram.link-target { outline: none; }
-.node.diamond.link-target .shape-fill,
-.node.parallelogram.link-target .shape-fill { stroke: var(--primary); stroke-width: 3; }
+
+/* SVG fill — solid (Tam): primary fill, white text */
+.shape-fill {
+  fill: var(--primary); stroke: transparent; stroke-width: 0;
+  filter: drop-shadow(0 4px 12px rgba(28,75,100,0.14));
+  transition: fill 0.2s var(--ease), stroke 0.2s var(--ease);
+}
+.node.s-solid.diamond:hover .shape-fill,
+.node.s-solid.parallelogram:hover .shape-fill { fill: var(--primary-hover); }
+.node.s-solid.diamond.selected .shape-fill,
+.node.s-solid.parallelogram.selected .shape-fill { fill: var(--primary-darker); }
+.node.s-solid.diamond.dimmed .shape-fill,
+.node.s-solid.parallelogram.dimmed .shape-fill { fill: var(--primary-light); }
+
+/* SVG stroke + dashed: white fill, visible border, dark text */
+.node.s-stroke.diamond, .node.s-dashed.diamond,
+.node.s-stroke.parallelogram, .node.s-dashed.parallelogram { color: var(--text-primary); }
+.node.s-stroke .shape-fill, .node.s-dashed .shape-fill {
+  fill: var(--stroke-bg); stroke: var(--stroke-border); stroke-width: 2; filter: none;
+}
+.node.s-stroke.diamond .num, .node.s-dashed.diamond .num,
+.node.s-stroke.parallelogram .num, .node.s-dashed.parallelogram .num { color: var(--stroke-border); }
+.node.s-stroke:hover .shape-fill, .node.s-dashed:hover .shape-fill {
+  fill: var(--surface-soft); stroke: var(--primary);
+}
+.node.s-stroke.selected .shape-fill, .node.s-dashed.selected .shape-fill { stroke: var(--primary-darker); }
+.node.s-solid.link-target .shape-fill,
+.node.s-stroke.link-target .shape-fill, .node.s-dashed.link-target .shape-fill {
+  stroke: var(--primary); stroke-width: 3;
+}
 
 /* connection handles — large hit area, small dot */
 .node .link-handle {
@@ -674,11 +695,15 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.02em; }
 .type-btn:hover { background: var(--surface); border-color: var(--primary); transform: translateY(-2px); box-shadow: var(--sh-sm); }
 .type-btn small { font-size: 9.5px; color: var(--text-muted); font-weight: 500; }
 .type-preview { width: 38px; height: 24px; display: grid; place-items: center; color: #fff; }
-.type-preview.pill { background: var(--primary); border-radius: var(--r-pill); }
-.type-preview.rect { background: var(--primary); border-radius: 6px; }
-.type-preview.stroke { background: var(--stroke-bg); border: 2px solid var(--stroke-border); border-radius: 6px; color: var(--stroke-border); }
-.type-preview.dashed { background: var(--stroke-bg); border: 2px dashed var(--stroke-border); border-radius: 6px; color: var(--stroke-border); }
-.type-preview.diamond { background: var(--primary); clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+/* shape geometry */
+.type-preview.pill { border-radius: var(--r-pill); }
+.type-preview.rect { border-radius: 6px; }
+.type-preview.diamond { clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%); }
+.type-preview.parallelogram { clip-path: polygon(22% 0, 100% 0, 78% 100%, 0 100%); }
+/* style fill (Tam / Stroke / Kəsik) */
+.type-preview.s-solid { background: var(--primary); color: #fff; }
+.type-preview.s-stroke { background: var(--stroke-bg); border: 2px solid var(--stroke-border); color: var(--stroke-border); }
+.type-preview.s-dashed { background: var(--stroke-bg); border: 2px dashed var(--stroke-border); color: var(--stroke-border); }
 
 /* field rows */
 .field-row { margin-bottom: 12px; display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: center; }
@@ -923,7 +948,7 @@ details[open] summary::before { transform: rotate(90deg); }
 .order-grip:active { cursor: grabbing; }
 .group-head[draggable="true"] { cursor: grab; }
 .group-head[draggable="true"]:active { cursor: grabbing; }
-.diagram-row .num { min-width: 44px; }
+.diagram-row .num, .pdf-item .num { min-width: 44px; }
 
 /* drop-target highlight */
 .group-card.drag-over {
@@ -936,22 +961,16 @@ details[open] summary::before { transform: rotate(90deg); }
   transform: translateY(-1px);
 }
 
-/* segmented Tam / Kəsik toggle (border style) */
+/* segmented border-style toggle (Tam / Stroke / Kəsik) */
 .seg-toggle {
-  display: inline-flex; border: 1px solid var(--border);
+  display: flex; width: 100%; border: 1px solid var(--border);
   border-radius: var(--r-sm); overflow: hidden; background: var(--surface);
 }
 .seg-toggle button {
-  padding: 7px 14px; font-size: 12.5px; font-weight: 600;
+  flex: 1; padding: 7px 10px; font-size: 12.5px; font-weight: 600;
   border: none; background: transparent; color: var(--text-secondary);
   cursor: pointer; transition: background 0.15s var(--ease), color 0.15s var(--ease);
 }
 .seg-toggle button + button { border-left: 1px solid var(--border); }
 .seg-toggle button:hover { background: var(--surface-soft); }
 .seg-toggle button.on { background: var(--primary); color: #fff; }
-
-/* parallelogram preview in the NODE ƏLAVƏ ET palette */
-.type-preview.parallelogram {
-  background: var(--primary);
-  clip-path: polygon(22% 0, 100% 0, 78% 100%, 0 100%);
-}

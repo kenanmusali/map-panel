@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { LogoFull } from '../Logo.jsx';
 import {
   ChevronLeft, ChevronRight, ChevronDown, LogOut, Plus, Loader2, Trash2,
-  Eye, Edit3, Search, Folder, FolderOpen, FolderPlus, Pencil
+  Eye, Edit3, Search, Folder, FolderOpen, FolderPlus, Pencil, GripVertical
 } from '../icons.jsx';
 import { api, setToken } from '../../api/client.js';
 import { pdfsApi } from '../../api/pdfsClient.js';
@@ -52,6 +52,12 @@ export default function PdfList({ onBack, onLogout }) {
   const [gmodal, setGmodal] = useState(null); // group modal: {type:'create'|'rename', group?}
   const [settings, setSettings] = useState(null);
 
+  // ---- drag & drop ordering ----
+  const groupDrag = useRef(null);
+  const [groupOver, setGroupOver] = useState(null);
+  const itemDrag = useRef(null);
+  const [itemOver, setItemOver] = useState(null);
+
   const role = localStorage.getItem('role');
   const isAdmin = role === 'admin';
 
@@ -74,7 +80,7 @@ export default function PdfList({ onBack, onLogout }) {
     try {
       const data = await pdfsApi.list();
       const gs = data.groups || [];
-      const list = (data.pdfs || []).slice().sort((a, b) => Number(a.id) - Number(b.id));
+      const list = data.pdfs || []; // keep stored order (drag & drop reordering)
       setGroups(gs);
       setPdfs(list);
       setExpanded(prev => {
@@ -96,6 +102,70 @@ export default function PdfList({ onBack, onLogout }) {
     onLogout();
   }
   function toggleGroup(gid) { setExpanded(prev => ({ ...prev, [gid]: !prev[gid] })); }
+
+  /* ---------- drag & drop: folders ---------- */
+  function onGroupDragStart(e, gid) {
+    if (!isAdmin) return;
+    groupDrag.current = gid;
+    e.dataTransfer.effectAllowed = 'move';
+  }
+  function onGroupDragOver(e, gid) {
+    if (groupDrag.current == null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (groupOver !== gid) setGroupOver(gid);
+  }
+  async function onGroupDrop(e, gid) {
+    e.preventDefault();
+    const from = groupDrag.current;
+    groupDrag.current = null;
+    setGroupOver(null);
+    if (from == null || from === gid) return;
+    const order = groups.map(g => g.id);
+    const fi = order.indexOf(from), ti = order.indexOf(gid);
+    if (fi < 0 || ti < 0) return;
+    order.splice(ti, 0, order.splice(fi, 1)[0]);
+    setGroups(order.map(id => groups.find(g => g.id === id)));
+    try { await pdfsApi.reorderGroups(order); } catch { load(); }
+  }
+  function onGroupDragEnd() { groupDrag.current = null; setGroupOver(null); }
+
+  /* ---------- drag & drop: PDFs inside a folder ---------- */
+  function onItemDragStart(e, gid, id) {
+    if (!isAdmin) return;
+    e.stopPropagation();
+    itemDrag.current = { gid, id };
+    e.dataTransfer.effectAllowed = 'move';
+  }
+  function onItemDragOver(e, gid, id) {
+    const d = itemDrag.current;
+    if (!d || Number(d.gid) !== Number(gid)) return;
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    if (!itemOver || itemOver.id !== id) setItemOver({ gid, id });
+  }
+  async function onItemDrop(e, gid, id) {
+    const d = itemDrag.current;
+    itemDrag.current = null;
+    setItemOver(null);
+    if (!d || Number(d.gid) !== Number(gid) || d.id === id) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const groupItems = pdfs.filter(p => Number(p.groupId) === Number(gid));
+    const order = groupItems.map(p => p.id);
+    const fi = order.indexOf(d.id), ti = order.indexOf(id);
+    if (fi < 0 || ti < 0) return;
+    order.splice(ti, 0, order.splice(fi, 1)[0]);
+    let k = 0;
+    const reordered = pdfs.map(p => {
+      if (Number(p.groupId) === Number(gid)) { return groupItems.find(x => x.id === order[k++]); }
+      return p;
+    });
+    setPdfs(reordered);
+    try { await pdfsApi.reorderPdfs(Number(gid), order); } catch { load(); }
+  }
+  function onItemDragEnd() { itemDrag.current = null; setItemOver(null); }
 
   async function viewPdf(p) {
     setBusy(p.id);
@@ -198,15 +268,33 @@ export default function PdfList({ onBack, onLogout }) {
           {error && !loading && <div className="empty-state error">{error}</div>}
           {noResults && <div className="empty-state">Heç bir qrup yoxdur</div>}
 
-          {!loading && !error && groups.map(g => {
-            const items = pdfs.filter(p => Number(p.groupId) === Number(g.id) && matches(p));
-            const total = pdfs.filter(p => Number(p.groupId) === Number(g.id)).length;
+          {!loading && !error && groups.map((g, gi) => {
+            const fullItems = pdfs.filter(p => Number(p.groupId) === Number(g.id));
+            const items = fullItems.filter(matches);
+            const total = fullItems.length;
             if (q && items.length === 0) return null;
             const isOpen = q ? true : !!expanded[g.id];
+            const dndOn = isAdmin && !q;
+            const folderNo = gi + 1;
+            const isGroupOver = groupOver === g.id && groupDrag.current !== g.id;
 
             return (
-              <div key={g.id} className={`group-card ${isOpen ? 'open' : ''}`}>
-                <div className="group-head" onClick={() => toggleGroup(g.id)}>
+              <div key={g.id} className={`group-card ${isOpen ? 'open' : ''} ${isGroupOver ? 'drag-over' : ''}`}>
+                <div
+                  className="group-head"
+                  onClick={() => toggleGroup(g.id)}
+                  draggable={dndOn}
+                  onDragStart={e => onGroupDragStart(e, g.id)}
+                  onDragOver={e => onGroupDragOver(e, g.id)}
+                  onDrop={e => onGroupDrop(e, g.id)}
+                  onDragEnd={onGroupDragEnd}
+                >
+                  {dndOn && (
+                    <span className="order-grip group-grip" title="Sürüklə" onClick={e => e.stopPropagation()}>
+                      <GripVertical size={15} />
+                    </span>
+                  )}
+                  <span className="folder-no">{folderNo}</span>
                   <span className="group-chevron">
                     {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                   </span>
@@ -237,40 +325,58 @@ export default function PdfList({ onBack, onLogout }) {
                 {isOpen && (
                   <div className="group-body">
                     {items.length === 0 && <div className="child-empty">Bu qrupda sənəd yoxdur.</div>}
-                    {items.map((p, idx) => (
-                      <div key={p.id} className="process-item pdf-item">
-                        <div className="num">{idx + 1}</div>
-                        <div className="label">
-                          <span className="row-title">
-                            {p.title}
-                            {p.size ? <span className="pdf-size">{fmtSize(p.size)}</span> : null}
-                          </span>
-                          {p.subtitle ? <span className="row-subtitle">{p.subtitle}</span> : null}
-                        </div>
-
-                        <div className="pdf-actions">
-                          <button className="pdf-action-btn" onClick={() => viewPdf(p)} disabled={busy === p.id} title="Bax">
-                            {busy === p.id ? <Loader2 size={15} className="spin" /> : <Eye size={15} />}
-                            <span>Bax</span>
-                          </button>
-                          <button className="pdf-action-btn" onClick={() => downloadPdf(p)} disabled={busy === p.id} title="Yüklə">
-                            <DownloadIcon size={15} /><span>Yüklə</span>
-                          </button>
-                          {isAdmin && (
-                            <>
-                              <button className="pdf-action-btn pdf-action-btn-icon nospace"
-                                onClick={(e) => { e.stopPropagation(); setModal({ mode: 'edit', pdf: p }); }} title="Redaktə et">
-                                <Edit3 size={15} />
-                              </button>
-                              <button className="pdf-action-btn pdf-action-btn-icon pdf-action-btn-danger"
-                                onClick={(e) => removePdf(e, p)} title="Sil">
-                                <Trash2 size={15} />
-                              </button>
-                            </>
+                    {items.map((p) => {
+                      const itemNo = fullItems.indexOf(p) + 1;
+                      const isItemOver = itemOver && itemOver.id === p.id
+                        && (!itemDrag.current || itemDrag.current.id !== p.id);
+                      return (
+                        <div
+                          key={p.id}
+                          className={`process-item pdf-item ${isItemOver ? 'drag-over' : ''}`}
+                          draggable={dndOn}
+                          onDragStart={e => onItemDragStart(e, g.id, p.id)}
+                          onDragOver={e => onItemDragOver(e, g.id, p.id)}
+                          onDrop={e => onItemDrop(e, g.id, p.id)}
+                          onDragEnd={onItemDragEnd}
+                        >
+                          {dndOn && (
+                            <span className="order-grip item-grip" title="Sürüklə" onClick={e => e.stopPropagation()}>
+                              <GripVertical size={14} />
+                            </span>
                           )}
+                          <div className="num">{folderNo}.{itemNo}</div>
+                          <div className="label">
+                            <span className="row-title">
+                              {p.title}
+                              {p.size ? <span className="pdf-size">{fmtSize(p.size)}</span> : null}
+                            </span>
+                            {p.subtitle ? <span className="row-subtitle">{p.subtitle}</span> : null}
+                          </div>
+
+                          <div className="pdf-actions">
+                            <button className="pdf-action-btn" onClick={() => viewPdf(p)} disabled={busy === p.id} title="Bax">
+                              {busy === p.id ? <Loader2 size={15} className="spin" /> : <Eye size={15} />}
+                              <span>Bax</span>
+                            </button>
+                            <button className="pdf-action-btn" onClick={() => downloadPdf(p)} disabled={busy === p.id} title="Yüklə">
+                              <DownloadIcon size={15} /><span>Yüklə</span>
+                            </button>
+                            {isAdmin && (
+                              <>
+                                <button className="pdf-action-btn pdf-action-btn-icon nospace"
+                                  onClick={(e) => { e.stopPropagation(); setModal({ mode: 'edit', pdf: p }); }} title="Redaktə et">
+                                  <Edit3 size={15} />
+                                </button>
+                                <button className="pdf-action-btn pdf-action-btn-icon pdf-action-btn-danger"
+                                  onClick={(e) => removePdf(e, p)} title="Sil">
+                                  <Trash2 size={15} />
+                                </button>
+                              </>
+                            )}
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 )}
               </div>

@@ -65,6 +65,10 @@ export const pdfsApi = {
   renameGroup: (gid, name) => jsonRequest('PUT', `/api/pdfs/group/${gid}`, { name }),
   deleteGroup: (gid) => jsonRequest('DELETE', `/api/pdfs/group/${gid}`),
 
+  // Ordering (drag & drop)
+  reorderGroups: (order) => jsonRequest('PUT', '/api/pdfs/groups/reorder', { order }),
+  reorderPdfs: (groupId, order) => jsonRequest('PUT', '/api/pdfs/reorder', { groupId, order }),
+
   create: ({ title, subtitle, groupId, file }) =>
     fileToBase64(file).then(dataBase64 =>
       jsonRequest('POST', '/api/pdfs', {

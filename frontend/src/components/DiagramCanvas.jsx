@@ -1,5 +1,6 @@
 // DiagramCanvas.jsx
 import { useRef, useState, useMemo, useEffect } from 'react';
+import { nodeView } from './nodeStyle.js';
 
 const SNAP_SIZE = 10;
 const RAIL_W = 56;
@@ -210,10 +211,11 @@ export default function DiagramCanvas({
         const isLinkTarget = link && String(link.overId) === String(node.id) && String(link.fromId) !== String(node.id);
         const showHandles = editMode && !drag && (String(hoverNodeId) === String(node.id) || (link && String(link.fromId) === String(node.id)));
 
+        const { shape, style } = nodeView(node);
         const cls = [
           'node',
-          node.type,
-          node.dash ? 'dash' : '',
+          shape,
+          `s-${style}`,
           isSelected ? 'selected' : '',
           dimmed ? 'dimmed' : '',
           editMode ? 'editable' : '',
@@ -246,14 +248,14 @@ export default function DiagramCanvas({
               onNodeClick(node.id, rect);
             }}
           >
-            <ShapeBg type={node.type} dash={node.dash} />
+            <ShapeBg shape={shape} style={style} />
             <div className="num">{node.id}</div>
             <div className="text">{node.text}</div>
 
             {showHandles && SIDES.map(side => (
               <div
                 key={side}
-                className={`link-handle ${side} ${node.type === 'diamond' ? 'on-diamond' : ''}`}
+                className={`link-handle ${side} ${shape === 'diamond' ? 'on-diamond' : ''}`}
                 title="Ox çəkmək üçün sürükləyin"
                 onMouseDown={(e) => onHandleMouseDown(e, node, side)}
                 onClick={(e) => e.stopPropagation()}
@@ -270,10 +272,11 @@ export default function DiagramCanvas({
 
 /* Renders the geometric body for shapes that can't be drawn with a plain
    CSS border (diamond, parallelogram). non-scaling-stroke keeps the dashed
-   "kəsik" border crisp even when the box is stretched. */
-function ShapeBg({ type, dash }) {
-  if (type !== 'diamond' && type !== 'parallelogram') return null;
-  const points = type === 'diamond'
+   "kəsik" border crisp even when the box is stretched. Fill/stroke colours
+   come from CSS based on the .s-solid / .s-stroke / .s-dashed class. */
+function ShapeBg({ shape, style }) {
+  if (shape !== 'diamond' && shape !== 'parallelogram') return null;
+  const points = shape === 'diamond'
     ? '50,2 98,50 50,98 2,50'
     : '20,5 98,5 80,95 2,95';
   return (
@@ -282,7 +285,7 @@ function ShapeBg({ type, dash }) {
         points={points}
         className="shape-fill"
         vectorEffect="non-scaling-stroke"
-        strokeDasharray={dash ? '7 5' : undefined}
+        strokeDasharray={style === 'dashed' ? '7 5' : undefined}
       />
     </svg>
   );

@@ -6,7 +6,7 @@
     },
     {
       "id": 2,
-      "name": "umumi 4"
+      "name": "Test Workflows (EN)"
     }
   ],
   "processes": [
@@ -33,6 +33,18 @@
       "title": "test",
       "subtitle": "",
       "groupId": 1
+    },
+    {
+      "id": 101,
+      "title": "Customer Support Ticket Resolution",
+      "subtitle": "TEST-EN-SHORT-12",
+      "groupId": 2
+    },
+    {
+      "id": 102,
+      "title": "E-commerce Order Fulfillment",
+      "subtitle": "TEST-EN-LONG-33",
+      "groupId": 2
     }
   ]
 }

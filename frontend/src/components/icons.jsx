@@ -17,6 +17,7 @@ export {
   SquareDashed,
   Diamond,
   BoxSelect,
+  Shapes,
   GripVertical,
   Undo2,
   Redo2,

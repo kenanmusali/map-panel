@@ -1,6 +1,6 @@
 // AdminPanel.jsx - Fixed with auto-height on drag
 import { useState, useRef } from 'react';
-import { Plus, Trash2, Pill, Square, SquareDashed, Diamond, BoxSelect, GripVertical, Eye, Archive, X } from './icons.jsx';
+import { Plus, Trash2, Pill, Square, SquareDashed, Diamond, BoxSelect, Shapes, GripVertical, Eye, Archive, X } from './icons.jsx';
 
 export default function AdminPanel({ process, selection, setSelection, updateProcess, onClose }) {
   return (
@@ -277,6 +277,7 @@ function PanelsSection({ process, selection, setSelection, updateProcess }) {
    ===================================================== */
 function NodesSection({ process, setSelection, updateProcess }) {
   const [targetLane, setTargetLane] = useState(0);
+  const [dashMode, setDashMode] = useState(false); // border style for new shape nodes
 
   function nextNodeId() {
     const used = process.nodes.map(n => n.id);
@@ -304,10 +305,14 @@ function NodesSection({ process, setSelection, updateProcess }) {
       rect: 'addım',
       stroke: 'alt-addım',
       diamond: 'qərar',
+      parallelogram: 'məlumat/giriş',
       dashed: 'alt-addım (kəsik)'
     };
+    // Border style (solid/dashed) is a per-node option for the filled shapes.
+    const supportsDash = ['pill', 'rect', 'diamond', 'parallelogram'].includes(type);
     const node = {
       id, type, x: lane.y + 80, y, laneId: lane.id, ...defaults,
+      ...(supportsDash && dashMode ? { dash: true } : {}),
       text: `Yeni ${labelByType[type] || 'addım'}`,
       info: { general: [''], risks: [''] }
     };
@@ -332,6 +337,13 @@ function NodesSection({ process, setSelection, updateProcess }) {
           }
         </select>
       </div>
+      <div className="field-row">
+        <label className="lbl">Sərhəd:</label>
+        <div className="seg-toggle">
+          <button type="button" className={!dashMode ? 'on' : ''} onClick={() => setDashMode(false)}>Tam</button>
+          <button type="button" className={dashMode ? 'on' : ''} onClick={() => setDashMode(true)}>Kəsik</button>
+        </div>
+      </div>
       <div className="node-types">
         <button className="type-btn" onClick={() => addNode('pill')}>
           <div className="type-preview pill"><Pill size={14} /></div>
@@ -341,13 +353,17 @@ function NodesSection({ process, setSelection, updateProcess }) {
           <div className="type-preview rect"><Square size={14} /></div>
           <span>Rect</span><small>Normal addım</small>
         </button>
-        <button className="type-btn" onClick={() => addNode('stroke')}>
-          <div className="type-preview stroke"><SquareDashed size={14} /></div>
-          <span>Stroke</span><small>Alt-addım</small>
-        </button>
         <button className="type-btn" onClick={() => addNode('diamond')}>
           <div className="type-preview diamond"><Diamond size={14} /></div>
           <span>Romb</span><small>Qərar (4 ox)</small>
+        </button>
+        <button className="type-btn" onClick={() => addNode('parallelogram')}>
+          <div className="type-preview parallelogram"><Shapes size={14} /></div>
+          <span>Parallel</span><small>Məlumat/giriş</small>
+        </button>
+        <button className="type-btn" onClick={() => addNode('stroke')}>
+          <div className="type-preview stroke"><SquareDashed size={14} /></div>
+          <span>Stroke</span><small>Alt-addım</small>
         </button>
         <button className="type-btn" onClick={() => addNode('dashed')}>
           <div className="type-preview dashed"><BoxSelect size={14} /></div>
@@ -364,6 +380,7 @@ function nodeDefaults(type) {
     case 'rect': return { w: 200, h: 70 };
     case 'stroke': return { w: 220, h: 60 };
     case 'diamond': return { w: 150, h: 150 };
+    case 'parallelogram': return { w: 210, h: 70 };
     case 'dashed': return { w: 220, h: 60 };
     default: return { w: 200, h: 70 };
   }
@@ -523,12 +540,23 @@ function NodeEditor({ node, process, updateProcess, onDelete }) {
           <select value={node.type} onChange={e => patch('type', e.target.value)}>
             <option value="pill">Pill</option>
             <option value="rect">Rect</option>
-            <option value="stroke">Stroke</option>
             <option value="diamond">Romb</option>
+            <option value="parallelogram">Parallel</option>
+            <option value="stroke">Stroke</option>
             <option value="dashed">Kəsik</option>
           </select>
         </div>
       </div>
+
+      {['pill', 'rect', 'diamond', 'parallelogram'].includes(node.type) && (
+        <div className="field-row col">
+          <label>Sərhəd stili</label>
+          <div className="seg-toggle">
+            <button type="button" className={!node.dash ? 'on' : ''} onClick={() => patch('dash', false)}>Tam</button>
+            <button type="button" className={node.dash ? 'on' : ''} onClick={() => patch('dash', true)}>Kəsik (xətli)</button>
+          </div>
+        </div>
+      )}
 
       <div className="field-row col">
         <label>Mətn</label>

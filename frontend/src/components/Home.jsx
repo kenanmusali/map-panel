@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { LogoFull } from './Logo.jsx';
 import {
   Search, LogOut, Plus, Loader2, Trash2, ChevronLeft,
-  ChevronRight, ChevronDown, Folder, FolderOpen, FolderPlus, Pencil, Edit3
+  ChevronRight, ChevronDown, Folder, FolderOpen, FolderPlus, Pencil, Edit3, GripVertical
 } from './icons.jsx';
 import { api, setToken } from '../api/client.js';
 import NameModal from './NameModal.jsx';
@@ -32,6 +32,12 @@ export default function Home({ onOpen, onLogout, onBack }) {
   const [modal, setModal] = useState(null);        // see types below
   const [busy, setBusy] = useState(false);
   const [settings, setSettings] = useState(null);
+
+  // ---- drag & drop ordering ----
+  const groupDrag = useRef(null);          // gid being dragged
+  const [groupOver, setGroupOver] = useState(null);
+  const itemDrag = useRef(null);           // { gid, id }
+  const [itemOver, setItemOver] = useState(null); // { gid, id }
 
   const role = localStorage.getItem('role');
   const isViewer = role === 'viewer';
@@ -83,6 +89,76 @@ export default function Home({ onOpen, onLogout, onBack }) {
   function toggleGroup(gid) {
     setExpanded(prev => ({ ...prev, [gid]: !prev[gid] }));
   }
+
+  /* ---------- drag & drop: folders ---------- */
+  function onGroupDragStart(e, gid) {
+    if (isViewer) return;
+    groupDrag.current = gid;
+    e.dataTransfer.effectAllowed = 'move';
+  }
+  function onGroupDragOver(e, gid) {
+    if (groupDrag.current == null) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    if (groupOver !== gid) setGroupOver(gid);
+  }
+  async function onGroupDrop(e, gid) {
+    e.preventDefault();
+    const from = groupDrag.current;
+    groupDrag.current = null;
+    setGroupOver(null);
+    if (from == null || from === gid) return;
+    const order = groups.map(g => g.id);
+    const fi = order.indexOf(from);
+    const ti = order.indexOf(gid);
+    if (fi < 0 || ti < 0) return;
+    order.splice(ti, 0, order.splice(fi, 1)[0]);
+    const next = order.map(id => groups.find(g => g.id === id));
+    setGroups(next); // optimistic
+    try { await api.reorderGroups(order); } catch { load(); }
+  }
+  function onGroupDragEnd() { groupDrag.current = null; setGroupOver(null); }
+
+  /* ---------- drag & drop: items inside a folder ---------- */
+  function onItemDragStart(e, gid, id) {
+    if (isViewer) return;
+    e.stopPropagation();
+    itemDrag.current = { gid, id };
+    e.dataTransfer.effectAllowed = 'move';
+  }
+  function onItemDragOver(e, gid, id) {
+    const d = itemDrag.current;
+    if (!d || Number(d.gid) !== Number(gid)) return; // only within the same folder
+    e.preventDefault();
+    e.stopPropagation();
+    e.dataTransfer.dropEffect = 'move';
+    if (!itemOver || itemOver.id !== id) setItemOver({ gid, id });
+  }
+  async function onItemDrop(e, gid, id) {
+    const d = itemDrag.current;
+    itemDrag.current = null;
+    setItemOver(null);
+    if (!d || Number(d.gid) !== Number(gid) || d.id === id) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const groupItems = processes.filter(p => Number(p.groupId) === Number(gid));
+    const order = groupItems.map(p => p.id);
+    const fi = order.indexOf(d.id);
+    const ti = order.indexOf(id);
+    if (fi < 0 || ti < 0) return;
+    order.splice(ti, 0, order.splice(fi, 1)[0]);
+    let k = 0;
+    const reordered = processes.map(p => {
+      if (Number(p.groupId) === Number(gid)) {
+        const nid = order[k++];
+        return groupItems.find(x => x.id === nid);
+      }
+      return p;
+    });
+    setProcesses(reordered); // optimistic
+    try { await api.reorderProcesses(Number(gid), order); } catch { load(); }
+  }
+  function onItemDragEnd() { itemDrag.current = null; setItemOver(null); }
 
   /* ---------- group actions ---------- */
   async function saveGroupCreate({ name }) {
@@ -194,16 +270,37 @@ export default function Home({ onOpen, onLogout, onBack }) {
           {error && !loading && <div className="empty-state error">{error}</div>}
           {noResults && <div className="empty-state">Heç bir qrup yoxdur</div>}
 
-          {!loading && !error && groups.map(g => {
-            const items = processes.filter(p => Number(p.groupId) === Number(g.id) && matches(p));
-            const total = processes.filter(p => Number(p.groupId) === Number(g.id)).length;
+          {!loading && !error && groups.map((g, gi) => {
+            const fullItems = processes.filter(p => Number(p.groupId) === Number(g.id));
+            const items = fullItems.filter(matches);
+            const total = fullItems.length;
             // hide a group if searching and it has no matches
             if (q && items.length === 0) return null;
             const isOpen = q ? true : !!expanded[g.id];
+            const dndOn = !isViewer && !q;
+            const folderNo = gi + 1;
+            const isGroupOver = groupOver === g.id && groupDrag.current !== g.id;
 
             return (
-              <div key={g.id} className={`group-card ${isOpen ? 'open' : ''}`}>
-                <div className="group-head" onClick={() => toggleGroup(g.id)}>
+              <div
+                key={g.id}
+                className={`group-card ${isOpen ? 'open' : ''} ${isGroupOver ? 'drag-over' : ''}`}
+              >
+                <div
+                  className="group-head"
+                  onClick={() => toggleGroup(g.id)}
+                  draggable={dndOn}
+                  onDragStart={e => onGroupDragStart(e, g.id)}
+                  onDragOver={e => onGroupDragOver(e, g.id)}
+                  onDrop={e => onGroupDrop(e, g.id)}
+                  onDragEnd={onGroupDragEnd}
+                >
+                  {dndOn && (
+                    <span className="order-grip group-grip" title="Sürüklə" onClick={e => e.stopPropagation()}>
+                      <GripVertical size={15} />
+                    </span>
+                  )}
+                  <span className="folder-no">{folderNo}</span>
                   <span className="group-chevron">
                     {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
                   </span>
@@ -236,27 +333,46 @@ export default function Home({ onOpen, onLogout, onBack }) {
                     {items.length === 0 && (
                       <div className="child-empty">Bu qrupda diaqram yoxdur.</div>
                     )}
-                    {items.map((p, idx) => (
-                      <div key={p.id} className="process-item diagram-row" onClick={() => onOpen(p.id)}>
-                        <div className="num">{idx + 1}</div>
-                        <div className="label">
-                          <span className="row-title">{p.title}</span>
-                          {p.subtitle ? <span className="row-subtitle">{p.subtitle}</span> : null}
-                        </div>
-                        {!isViewer && (
-                          <div className="row-actions" onClick={e => e.stopPropagation()}>
-                            <button className="delete-archive-btn" title="Redaktə et"
-                              onClick={() => setModal({ type: 'diagram-edit', proc: p })}>
-                              <Edit3 size={16} />
-                            </button>
-                            <button className="delete-archive-btn" title="Sil"
-                              onClick={(e) => deleteProcess(e, p)}>
-                              <Trash2 size={16} />
-                            </button>
+                    {items.map((p) => {
+                      const itemNo = fullItems.indexOf(p) + 1;
+                      const isItemOver = itemOver && itemOver.id === p.id
+                        && (!itemDrag.current || itemDrag.current.id !== p.id);
+                      return (
+                        <div
+                          key={p.id}
+                          className={`process-item diagram-row ${isItemOver ? 'drag-over' : ''}`}
+                          onClick={() => onOpen(p.id)}
+                          draggable={dndOn}
+                          onDragStart={e => onItemDragStart(e, g.id, p.id)}
+                          onDragOver={e => onItemDragOver(e, g.id, p.id)}
+                          onDrop={e => onItemDrop(e, g.id, p.id)}
+                          onDragEnd={onItemDragEnd}
+                        >
+                          {dndOn && (
+                            <span className="order-grip item-grip" title="Sürüklə" onClick={e => e.stopPropagation()}>
+                              <GripVertical size={14} />
+                            </span>
+                          )}
+                          <div className="num">{folderNo}.{itemNo}</div>
+                          <div className="label">
+                            <span className="row-title">{p.title}</span>
+                            {p.subtitle ? <span className="row-subtitle">{p.subtitle}</span> : null}
                           </div>
-                        )}
-                      </div>
-                    ))}
+                          {!isViewer && (
+                            <div className="row-actions" onClick={e => e.stopPropagation()}>
+                              <button className="delete-archive-btn" title="Redaktə et"
+                                onClick={() => setModal({ type: 'diagram-edit', proc: p })}>
+                                <Edit3 size={16} />
+                              </button>
+                              <button className="delete-archive-btn" title="Sil"
+                                onClick={(e) => deleteProcess(e, p)}>
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 )}
               </div>

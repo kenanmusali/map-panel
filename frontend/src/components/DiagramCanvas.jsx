@@ -213,6 +213,7 @@ export default function DiagramCanvas({
         const cls = [
           'node',
           node.type,
+          node.dash ? 'dash' : '',
           isSelected ? 'selected' : '',
           dimmed ? 'dimmed' : '',
           editMode ? 'editable' : '',
@@ -245,6 +246,7 @@ export default function DiagramCanvas({
               onNodeClick(node.id, rect);
             }}
           >
+            <ShapeBg type={node.type} dash={node.dash} />
             <div className="num">{node.id}</div>
             <div className="text">{node.text}</div>
 
@@ -263,6 +265,26 @@ export default function DiagramCanvas({
         );
       })}
     </div>
+  );
+}
+
+/* Renders the geometric body for shapes that can't be drawn with a plain
+   CSS border (diamond, parallelogram). non-scaling-stroke keeps the dashed
+   "kəsik" border crisp even when the box is stretched. */
+function ShapeBg({ type, dash }) {
+  if (type !== 'diamond' && type !== 'parallelogram') return null;
+  const points = type === 'diamond'
+    ? '50,2 98,50 50,98 2,50'
+    : '20,5 98,5 80,95 2,95';
+  return (
+    <svg className="shape-svg" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <polygon
+        points={points}
+        className="shape-fill"
+        vectorEffect="non-scaling-stroke"
+        strokeDasharray={dash ? '7 5' : undefined}
+      />
+    </svg>
   );
 }
 

@@ -59,6 +59,10 @@ export const api = {
   renameGroup: (gid, name) => request('PUT', `/api/processes/group/${gid}`, { name }),
   deleteGroup: (gid) => request('DELETE', `/api/processes/group/${gid}`),
 
+  // Ordering (drag & drop)
+  reorderGroups: (order) => request('PUT', '/api/processes/groups/reorder', { order }),
+  reorderProcesses: (groupId, order) => request('PUT', '/api/processes/reorder', { groupId, order }),
+
   // Settings (editable section titles)
   getSettings: () => request('GET', '/api/settings'),
   updateSettings: (patch) => request('PUT', '/api/settings', patch)

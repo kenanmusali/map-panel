@@ -476,25 +476,42 @@ h1, h2, h3 { font-weight: 800; letter-spacing: -0.02em; }
 }
 .node.stroke .num, .node.dashed .num { font-size: 26px; color: var(--stroke-border); font-weight: 800; min-width: 44px; }
 
-/* diamond (romb) */
-.node.diamond {
+/* dashed ("kəsik") border option for the filled shapes */
+.node.pill.dash, .node.rect.dash {
+  border: 2px dashed rgba(255,255,255,0.8);
+}
+.node.stroke.dash { border-style: dashed; }
+
+/* SVG-bodied shapes: diamond (romb) + parallelogram */
+.node.diamond, .node.parallelogram {
   background: transparent; border: none; box-shadow: none;
   justify-content: center; text-align: center; padding: 10px;
 }
-.node.diamond::before {
-  content: ""; position: absolute; inset: 0;
-  background: var(--primary);
-  clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-  box-shadow: 0 4px 12px rgba(28,75,100,0.12);
-  transition: background 0.2s var(--ease); z-index: 0;
+.node.diamond::before { content: none; } /* legacy clip-path body removed */
+.shape-svg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  z-index: 0; overflow: visible; pointer-events: none;
 }
-.node.diamond:hover::before { background: var(--primary-hover); }
-.node.diamond.selected::before { background: var(--primary-darker); box-shadow: 0 0 0 3px var(--primary); }
-.node.diamond.dimmed::before { background: var(--primary-light); }
-.node.diamond .num, .node.diamond .text { position: relative; z-index: 1; }
-.node.diamond .text { flex: 0 1 auto; }
-.node.diamond.link-target { outline: none; }
-.node.diamond.link-target::before { box-shadow: 0 0 0 3px var(--primary); }
+.shape-fill {
+  fill: var(--primary); stroke: transparent; stroke-width: 0;
+  filter: drop-shadow(0 4px 12px rgba(28,75,100,0.14));
+  transition: fill 0.2s var(--ease);
+}
+.node.dash .shape-fill { stroke: rgba(255,255,255,0.85); stroke-width: 2; }
+.node.diamond:hover .shape-fill,
+.node.parallelogram:hover .shape-fill { fill: var(--primary-hover); }
+.node.diamond.selected .shape-fill,
+.node.parallelogram.selected .shape-fill { fill: var(--primary-darker); }
+.node.diamond.dimmed .shape-fill,
+.node.parallelogram.dimmed .shape-fill { fill: var(--primary-light); }
+.node.diamond .num, .node.diamond .text,
+.node.parallelogram .num, .node.parallelogram .text { position: relative; z-index: 1; }
+.node.diamond .text, .node.parallelogram .text { flex: 0 1 auto; }
+.node.parallelogram .num { font-size: 13px; color: #fff; opacity: 0.85; min-width: 16px; }
+.node.diamond.selected, .node.parallelogram.selected { box-shadow: none; }
+.node.diamond.link-target, .node.parallelogram.link-target { outline: none; }
+.node.diamond.link-target .shape-fill,
+.node.parallelogram.link-target .shape-fill { stroke: var(--primary); stroke-width: 3; }
 
 /* connection handles — large hit area, small dot */
 .node .link-handle {
@@ -887,3 +904,54 @@ details[open] summary::before { transform: rotate(90deg); }
 .tile-wrap .section-tile { flex: 1; }
 .tile-edit { position: absolute; top: 10px; right: 10px; z-index: 2; }
 .tile-edit .title-edit-btn { margin-left: 0; background: var(--surface-soft); }
+
+/* ============================================================
+   ORDERING — folder numbers, drag handles, drop targets
+   ============================================================ */
+.folder-no {
+  flex-shrink: 0; min-width: 24px; height: 24px; padding: 0 7px;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--primary); color: #fff;
+  border-radius: var(--r-sm); font-size: 13px; font-weight: 800;
+}
+.order-grip {
+  display: inline-flex; align-items: center; justify-content: center;
+  color: var(--text-muted); cursor: grab; flex-shrink: 0;
+  opacity: 0.55; transition: opacity 0.15s var(--ease), color 0.15s var(--ease);
+}
+.order-grip:hover { opacity: 1; color: var(--primary); }
+.order-grip:active { cursor: grabbing; }
+.group-head[draggable="true"] { cursor: grab; }
+.group-head[draggable="true"]:active { cursor: grabbing; }
+.diagram-row .num { min-width: 44px; }
+
+/* drop-target highlight */
+.group-card.drag-over {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary), var(--sh-md);
+}
+.process-item.drag-over {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px var(--primary);
+  transform: translateY(-1px);
+}
+
+/* segmented Tam / Kəsik toggle (border style) */
+.seg-toggle {
+  display: inline-flex; border: 1px solid var(--border);
+  border-radius: var(--r-sm); overflow: hidden; background: var(--surface);
+}
+.seg-toggle button {
+  padding: 7px 14px; font-size: 12.5px; font-weight: 600;
+  border: none; background: transparent; color: var(--text-secondary);
+  cursor: pointer; transition: background 0.15s var(--ease), color 0.15s var(--ease);
+}
+.seg-toggle button + button { border-left: 1px solid var(--border); }
+.seg-toggle button:hover { background: var(--surface-soft); }
+.seg-toggle button.on { background: var(--primary); color: #fff; }
+
+/* parallelogram preview in the NODE ƏLAVƏ ET palette */
+.type-preview.parallelogram {
+  background: var(--primary);
+  clip-path: polygon(22% 0, 100% 0, 78% 100%, 0 100%);
+}

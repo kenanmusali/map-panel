@@ -11,11 +11,11 @@ function authHeaders(extra = {}) {
 
 async function jsonRequest(method, path, body) {
   const headers = authHeaders({ 'Content-Type': 'application/json' });
-  const res = await `${API_URL}${path}`, {
-    method,
-    headers,
-    body: body ? JSON.stringify(body) : undefined
-  });
+const res = await fetch(`${API_URL}${path}`, {
+  method,
+  headers,
+  body: body ? JSON.stringify(body) : undefined
+});
   if (res.status === 401) {
     setToken(null);
     const err = new Error('Unauthorized');

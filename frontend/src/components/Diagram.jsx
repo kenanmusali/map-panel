@@ -1,16 +1,39 @@
 // Diagram.jsx
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
-  ChevronLeft, LogOut, Edit3, Eye, Save, Loader2, CheckCircle2, AlertCircle, Undo2, Redo2,
-  Maximize2, Minimize2, PanelRight, PanelRightOpen, X
+  ChevronLeft, LogOut, Edit3, Eye, EyeOff, Save, Loader2, CheckCircle2, AlertCircle, Undo2, Redo2,
+  Maximize2, Minimize2, PanelRight, PanelRightOpen, X,
+  Play, Pause, SkipBack, SkipForward, RotateCcw, MonitorPlay, Clock
 } from './icons.jsx';
 import { LogoFull } from './Logo.jsx';
-import { api, setToken } from '../api/client.js';
-import DiagramCanvas from './DiagramCanvas.jsx';
+import { api, setToken, beat, track } from '../api/client.js';
+import DiagramCanvas, { edgePoints, polylinesCross } from './DiagramCanvas.jsx';
 import NodeModal from './NodeModal.jsx';
 import AdminPanel from './AdminPanel.jsx';
+import SelectionMenu from './SelectionMenu.jsx';
+import { deriveAccentVars, deriveLaneVars, deriveEdgeVars, asColorString, normalizeTheme } from './colorUtils.js';
+import { autoNodeHeight } from './nodeMeasure.js';
+import { nodeDefaults } from './nodeStyle.js';
+import { resolveNodePlacement } from './nodeLayout.js';
 
 const DRAFT_KEY = (id) => `absheron_draft_${id}`;
+const DRAFT_TS_KEY = (id) => `absheron_draft_${id}_ts`;
+
+// Human-friendly "last edited" label for the unsaved-changes banner.
+const AZ_MONTHS = ['yanvar', 'fevral', 'mart', 'aprel', 'may', 'iyun',
+  'iyul', 'avqust', 'sentyabr', 'oktyabr', 'noyabr', 'dekabr'];
+function formatDraftTime(ts) {
+  if (!ts) return '';
+  const d = new Date(ts);
+  const now = new Date();
+  const hhmm = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  const sameDay = d.toDateString() === now.toDateString();
+  const yest = new Date(now); yest.setDate(now.getDate() - 1);
+  const isYest = d.toDateString() === yest.toDateString();
+  if (sameDay) return `bu gün ${hhmm}`;
+  if (isYest) return `dünən ${hhmm}`;
+  return `${d.getDate()} ${AZ_MONTHS[d.getMonth()]} ${d.getFullYear()}, ${hhmm}`;
+}
 const LANE_PAD = 20;
 const LANE_MIN_H = 160;
 
@@ -106,18 +129,56 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
   const [saving, setSaving] = useState(false);
   const [savedFlash, setSavedFlash] = useState(false);
 
+  // ---- Live collaboration (presence, edit-lock, live sync) ----
+  const username = localStorage.getItem('username') || '';
+  const [lockedBy, setLockedBy] = useState(null); // username of another editor, or null
+  const lastRevRef = useRef(0);
+  const holdingLockRef = useRef(false);
+  const lockedByRef = useRef(null);
+  useEffect(() => { lockedByRef.current = lockedBy; }, [lockedBy]);
+
   // View: fit-to-width (no horizontal scroll) vs classic (native size)
   const [fitWidth, setFitWidth] = useState(false);
   // Side panel open/close (edit mode)
   const [panelOpen, setPanelOpen] = useState(true);
+  // Height of the floating navbar (AdminPanel), so the canvas can pad clear of it
+  const [navbarH, setNavbarH] = useState(0);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   // Live size of the diagram container, for fit-to-screen scaling
   const [containerW, setContainerW] = useState(0);
   const [containerH, setContainerH] = useState(0);
   const containerRef = useRef(null);
 
   const [hasDraft, setHasDraft] = useState(false);
+  const [draftTs, setDraftTs] = useState(null); // ms timestamp of the last unsaved edit
   const [serverProcess, setServerProcess] = useState(null);
   const [modalAnchorRect, setModalAnchorRect] = useState(null);
+  const [interacting, setInteracting] = useState(false);
+  // Border style chosen in the "Node əlavə et" sidebar for new shapes.
+  const [addStyle, setAddStyle] = useState('solid');
+  // Presentation ("Təqdimat") mode: auto-walk every node id 1→last, scroll to
+  // it, spotlight it and show its popup, with play/pause/step/exit controls.
+  const [presenting, setPresenting] = useState(false);
+  const [presentIndex, setPresentIndex] = useState(0);
+  const [presentPlaying, setPresentPlaying] = useState(true);
+  const [presentPopup, setPresentPopup] = useState(false);
+  // User toggle: whether the info popup appears for each node during a presentation.
+  const [presentShowPopup, setPresentShowPopup] = useState(true);
+  // Per-node dwell while auto-playing — user adjustable 1s…10s via the slider.
+  const [presentDwell, setPresentDwell] = useState(4000); // ms
+  // Inline "jump to node" editor for the presentation counter (null = not editing).
+  const [presentJumpDraft, setPresentJumpDraft] = useState(null);
+  // A new edge awaiting confirmation because it would cross existing arrow(s).
+  const [pendingEdge, setPendingEdge] = useState(null);
+
+  // Multi-select: set of node ids selected together (edit mode).
+  const [selectedIds, setSelectedIds] = useState([]);
+  const selectedIdsRef = useRef(selectedIds);
+  useEffect(() => { selectedIdsRef.current = selectedIds; }, [selectedIds]);
+  const editModeRef = useRef(editMode);
+  useEffect(() => { editModeRef.current = editMode; }, [editMode]);
+  const selectionRef = useRef(selection);
+  useEffect(() => { selectionRef.current = selection; }, [selection]);
 
   const processRef = useRef(process);
   const dirtyRef = useRef(dirty);
@@ -182,6 +243,111 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
 
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [processId]);
 
+  /* ---------------- Live: presence heartbeat while viewing a diagram ------- */
+  useEffect(() => {
+    if (!processId) return;
+    const title = processRef.current?.title || '';
+    beat('diagram', processId, title);
+    const t = setInterval(() => beat('diagram', processId, processRef.current?.title || ''), 12000);
+    return () => clearInterval(t);
+    /* eslint-disable-next-line */
+  }, [processId]);
+
+  /* ---------------- Live sync: reload when another admin saves ------------- */
+  useEffect(() => {
+    if (!processId) return;
+    let stop = false;
+    const poll = async () => {
+      try {
+        const { revs } = await api.getRevs();
+        const rev = Number(revs?.[String(processId)] || 0);
+        if (stop) return;
+        if (!lastRevRef.current) { lastRevRef.current = rev; return; }
+        // Someone else saved: refresh, but never clobber our own edits.
+        if (rev > lastRevRef.current && !editModeRef.current && !dirtyRef.current) {
+          lastRevRef.current = rev;
+          load();
+        } else if (rev > lastRevRef.current) {
+          lastRevRef.current = rev;
+        }
+      } catch { /* ignore */ }
+    };
+    const t = setInterval(poll, 4000);
+    return () => { stop = true; clearInterval(t); };
+    /* eslint-disable-next-line */
+  }, [processId]);
+
+  /* ---------------- Edit-lock: acquire on enter, refresh, release --------- */
+  const acquireLock = useCallback(async () => {
+    try {
+      // Fresh pre-check first: if someone else already holds it, stop here.
+      const pre = await api.lockStatus(processId);
+      if (pre?.lock && pre.lock.owner !== username) {
+        lockedByRef.current = pre.lock.owner; setLockedBy(pre.lock.owner);
+        return false;
+      }
+      const r = await api.acquireLock(processId);
+      if (r && r.ok) { holdingLockRef.current = true; lockedByRef.current = null; setLockedBy(null); return true; }
+      const who = r?.lock?.owner || 'başqa admin';
+      lockedByRef.current = who; setLockedBy(who);
+      return false;
+    } catch (e) {
+      // 423 = held by another admin.
+      if (e.status === 423) {
+        const who = e.body?.lock?.owner || 'başqa admin';
+        lockedByRef.current = who; setLockedBy(who);
+        return false;
+      }
+      // Any other failure: we CANNOT confirm we own the lock, so fail CLOSED —
+      // never risk two admins editing at once. The user can retry.
+      lockedByRef.current = '__error__'; setLockedBy('__error__');
+      return false;
+    }
+  }, [processId, username]);
+
+  const releaseLock = useCallback(async () => {
+    if (!holdingLockRef.current) return;
+    holdingLockRef.current = false;
+    try { await api.releaseLock(processId); } catch { /* ignore */ }
+  }, [processId]);
+
+  // While editing, refresh the lock so it doesn't expire; also detect takeover.
+  useEffect(() => {
+    if (!editMode) return;
+    const t = setInterval(async () => {
+      try {
+        const r = await api.acquireLock(processId);
+        if (!r.ok) setLockedBy(r.lock?.owner || 'başqa admin');
+      } catch (e) {
+        if (e.status === 423) setLockedBy(e.body?.lock?.owner || 'başqa admin');
+      }
+    }, 10000);
+    return () => clearInterval(t);
+    /* eslint-disable-next-line */
+  }, [editMode, processId]);
+
+  // Not editing? Keep an eye on whether someone else is editing (banner).
+  useEffect(() => {
+    if (editMode || isViewer || !processId) return;
+    let stop = false;
+    const check = async () => {
+      try {
+        const { lock } = await api.lockStatus(processId);
+        if (!stop) setLockedBy(lock && lock.owner !== username ? lock.owner : null);
+      } catch { /* ignore */ }
+    };
+    check();
+    const t = setInterval(check, 5000);
+    return () => { stop = true; clearInterval(t); };
+    /* eslint-disable-next-line */
+  }, [editMode, processId, isViewer]);
+
+  // Release the lock + drop presence when leaving the diagram entirely.
+  useEffect(() => {
+    return () => { releaseLock(); };
+    /* eslint-disable-next-line */
+  }, [processId]);
+
   // When opened from the list with a focused node, open that node's popup.
   useEffect(() => {
     if (!loading && process && focusNodeId != null) {
@@ -197,7 +363,12 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
 
   useEffect(() => {
     if (dirty && process) {
-      try { localStorage.setItem(DRAFT_KEY(processId), JSON.stringify(process)); } catch (e) { }
+      try {
+        localStorage.setItem(DRAFT_KEY(processId), JSON.stringify(process));
+        const ts = Date.now();
+        localStorage.setItem(DRAFT_TS_KEY(processId), String(ts));
+        setDraftTs(ts);
+      } catch (e) { }
     }
   }, [process, dirty, processId]);
 
@@ -212,11 +383,43 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
   useEffect(() => {
     function onKeyDown(e) {
       if (!editMode) return;
-      const mod = e.metaKey || e.ctrlKey;
-      if (!mod) return;
       const tag = (e.target.tagName || '').toLowerCase();
-      if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable) return;
+      const typing = tag === 'input' || tag === 'textarea' || tag === 'select' || e.target.isContentEditable;
+      const mod = e.metaKey || e.ctrlKey;
       const key = e.key.toLowerCase();
+
+      // Delete / Backspace removes the current selection (not while typing).
+      if ((e.key === 'Delete' || e.key === 'Backspace') && !typing) {
+        if (selectedIdsRef.current.length) { e.preventDefault(); deleteSelectedNodes(); return; }
+        // Fix #10 — a selected arrow (edge) is removed with Delete too.
+        if (selectionRef.current?.kind === 'edge') { e.preventDefault(); deleteEdgeByIndex(selectionRef.current.id); return; }
+        if (selectionRef.current?.kind === 'node') { e.preventDefault(); deleteNodeById(selectionRef.current.id); return; }
+        return;
+      }
+      // Fix #9 — move the selected node(s) with the arrow keys.
+      if (!typing && !mod &&
+        (e.key === 'ArrowUp' || e.key === 'ArrowDown' || e.key === 'ArrowLeft' || e.key === 'ArrowRight')) {
+        const ids = selectedIdsRef.current.length
+          ? selectedIdsRef.current
+          : (selectionRef.current?.kind === 'node' ? [selectionRef.current.id] : []);
+        if (ids.length) {
+          e.preventDefault();
+          const step = e.shiftKey ? 1 : 10; // Shift = fine 1px, else 10px grid
+          const dx = e.key === 'ArrowLeft' ? -step : e.key === 'ArrowRight' ? step : 0;
+          const dy = e.key === 'ArrowUp' ? -step : e.key === 'ArrowDown' ? step : 0;
+          moveNodesBy(ids, dx, dy);
+        }
+        return;
+      }
+      // Escape clears the multi-selection.
+      if (e.key === 'Escape' && !typing) {
+        if (selectedIdsRef.current.length) { setSelectedIds([]); }
+        return;
+      }
+      if (!mod) return;
+      if (typing) return;
+      // Ctrl/Cmd+A selects all nodes.
+      if (key === 'a') { e.preventDefault(); selectAllNodes(); return; }
       if (key === 'z' && !e.shiftKey) { e.preventDefault(); undo(); }
       else if ((key === 'z' && e.shiftKey) || key === 'y') { e.preventDefault(); redo(); }
     }
@@ -224,6 +427,9 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
     return () => window.removeEventListener('keydown', onKeyDown);
     /* eslint-disable-next-line */
   }, [editMode]);
+
+  // Clear multi-selection whenever we leave edit mode.
+  useEffect(() => { if (!editMode) setSelectedIds([]); }, [editMode]);
 
   async function load() {
     setLoading(true);
@@ -236,18 +442,21 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
       const draftStr = localStorage.getItem(DRAFT_KEY(processId));
       if (draftStr) {
         try {
-          const draft = JSON.parse(draftStr);
+          const draft = normalizeProcess(JSON.parse(draftStr));
           setProcess(draft);
           processRef.current = draft;
           resetHistory(draft);
           setHasDraft(true);
           setDirty(true);
+          const ts = Number(localStorage.getItem(DRAFT_TS_KEY(processId)));
+          setDraftTs(Number.isFinite(ts) && ts > 0 ? ts : null);
         } catch {
           setProcess(normalized);
           processRef.current = normalized;
           resetHistory(normalized);
           setHasDraft(false);
           setDirty(false);
+          setDraftTs(null);
         }
       } else {
         setProcess(normalized);
@@ -255,6 +464,7 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
         resetHistory(normalized);
         setHasDraft(false);
         setDirty(false);
+        setDraftTs(null);
       }
       setSelection(null);
     } catch (e) {
@@ -267,11 +477,13 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
 
   function discardDraft() {
     localStorage.removeItem(DRAFT_KEY(processId));
+    localStorage.removeItem(DRAFT_TS_KEY(processId));
     setProcess(serverProcess);
     processRef.current = serverProcess;
     resetHistory(serverProcess);
     setHasDraft(false);
     setDirty(false);
+    setDraftTs(null);
     setSelection(null);
   }
 
@@ -320,46 +532,204 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
     if (!process || saving) return;
     setSaving(true);
     try {
-      await api.updateProcess(process.id, process);
+      const saved = await api.updateProcess(process.id, process);
+      if (saved && saved._rev) lastRevRef.current = saved._rev;
       localStorage.removeItem(DRAFT_KEY(processId));
+      localStorage.removeItem(DRAFT_TS_KEY(processId));
       setDirty(false);
       setHasDraft(false);
+      setDraftTs(null);
       setSavedFlash(true);
       setTimeout(() => setSavedFlash(false), 2000);
     } catch (e) {
-      alert('Yadda saxlanılmadı: ' + e.message);
+      if (e.status === 423) {
+        setLockedBy((e.body && e.body.lock && e.body.lock.owner) || 'başqa admin');
+        alert(e.message || 'Bu diaqramı başqa admin redaktə edir.');
+      } else {
+        alert('Yadda saxlanılmadı: ' + e.message);
+      }
     } finally {
       setSaving(false);
     }
   }
 
-  function toggleEdit() {
+  async function toggleEdit() {
     if (isViewer) return;
-    setEditMode(!editMode);
+    if (editMode) {
+      // leaving edit mode → release the lock for others
+      setEditMode(false);
+      setSelection(null);
+      releaseLock();
+      return;
+    }
+    // entering edit mode → must hold the live lock first
+    const ok = await acquireLock();
+    if (!ok) {
+      if (lockedByRef.current === '__error__') {
+        alert('Redaktə kilidini yoxlamaq mümkün olmadı. Zəhmət olmasa bir azdan yenidən cəhd edin.');
+      } else {
+        alert(`Bu diaqramı hazırda ${lockedByRef.current || 'başqa admin'} redaktə edir. Onlar bitirib dərc edənə (yadda saxlayana) qədər gözləyin.`);
+      }
+      return;
+    }
+    setPanelOpen(true);
+    setEditMode(true);
     setSelection(null);
+    // The one activity event worth recording on open: this admin began editing.
+    track('edit.start', processId, processRef.current?.title || '');
   }
 
   function logout() {
+    releaseLock();
+    api.presenceLeave();
     setToken(null);
     localStorage.removeItem('role');
     localStorage.removeItem('username');
     onLogout();
   }
 
-  const onNodeClick = useCallback((nodeId, rect) => {
-    setSelection({ kind: 'node', id: nodeId });
+  function handleBack() {
+    releaseLock();
+    onBack();
+  }
+
+  const onNodeClick = useCallback((nodeId, rect, menu = true, opts = {}) => {
+    // Multi-select toggle (Shift/Ctrl/Cmd click) — edit mode only, no popup.
+    if (opts.additive && editModeRef.current) {
+      setSelectedIds(prev => {
+        const has = prev.some(id => String(id) === String(nodeId));
+        return has ? prev.filter(id => String(id) !== String(nodeId)) : [...prev, nodeId];
+      });
+      setSelection(null);
+      setModalAnchorRect(null);
+      return;
+    }
+    // Plain click: single select. If the node is part of an existing
+    // multi-selection and this is just a select (not opening menu), keep the
+    // group so a drag can move them together; otherwise collapse to one.
+    if (!(menu === false && selectedIdsRef.current.some(id => String(id) === String(nodeId)))) {
+      setSelectedIds([nodeId]);
+    }
+    setSelection({ kind: 'node', id: nodeId, menu: menu !== false });
     setModalAnchorRect(rect || null);
+    setInteracting(false);
+    // (Node clicks are intentionally NOT tracked — that was pure noise and a
+    //  fetch on every tap. Only edit-start and save are recorded now.)
+  }, [processId]);
+
+  /** Marquee/rubber-band select: replace selection with everything in the box. */
+  const onMarqueeSelect = useCallback((ids) => {
+    setSelectedIds(ids);
+    setSelection(null);
+    setModalAnchorRect(null);
   }, []);
 
-  const onLaneClick = useCallback((laneIndex) => {
+  /** Select all nodes (Ctrl+A). */
+  const selectAllNodes = useCallback(() => {
+    const p = processRef.current;
+    if (!p) return;
+    setSelectedIds(p.nodes.map(n => n.id));
+    setSelection(null);
+    setModalAnchorRect(null);
+  }, []);
+
+  /** Delete every selected node (and edges touching them). */
+  const deleteSelectedNodes = useCallback(() => {
+    const ids = selectedIdsRef.current;
+    if (!ids.length) return;
+    const idSet = new Set(ids.map(String));
+    updateProcess(p => {
+      const nodes = p.nodes.filter(n => !idSet.has(String(n.id)));
+      const edges = p.edges.filter(e => !idSet.has(String(e.from)) && !idSet.has(String(e.to)));
+      const r = repackLanes(p.lanes, nodes);
+      return { ...p, nodes: r.nodes, lanes: r.lanes, edges };
+    });
+    setSelectedIds([]);
+    setSelection(null);
+    setModalAnchorRect(null);
+  }, []);
+
+  /** Fix #10 — delete a single arrow (edge) by its index. */
+  const deleteEdgeByIndex = useCallback((index) => {
+    updateProcess(p => ({ ...p, edges: p.edges.filter((_, i) => i !== index) }));
+    setSelection(null);
+    setModalAnchorRect(null);
+  }, []);
+
+  /** Delete one node by id (used by keyboard when a single node is selected). */
+  const deleteNodeById = useCallback((id) => {
+    updateProcess(p => {
+      const nodes = p.nodes.filter(n => String(n.id) !== String(id));
+      const edges = p.edges.filter(e => String(e.from) !== String(id) && String(e.to) !== String(id));
+      const r = repackLanes(p.lanes, nodes);
+      return { ...p, nodes: r.nodes, lanes: r.lanes, edges };
+    });
+    setSelectedIds([]);
+    setSelection(null);
+    setModalAnchorRect(null);
+  }, []);
+
+  /** Fix #9 — nudge the given node ids by (dx, dy), reassigning lanes + repacking.
+   *  Consecutive nudges coalesce into a single undo step via the shared tag. */
+  const moveNodesBy = useCallback((ids, dx, dy) => {
+    if (!ids || !ids.length) return;
+    const idSet = new Set(ids.map(String));
+    updateProcess(p => {
+      const nodes = p.nodes.map(n => {
+        if (!idSet.has(String(n.id))) return n;
+        const nx = Math.max(60, (n.x || 0) + dx);
+        const ny = Math.max(4, (n.y || 0) + dy);
+        const cy = ny + (n.h || 100) / 2;
+        let laneId = n.laneId, best = Infinity, contained = false;
+        for (const lane of p.lanes) {
+          if (cy >= lane.y && cy < lane.y + lane.h) { laneId = lane.id; contained = true; break; }
+          const dist = Math.min(Math.abs(cy - lane.y), Math.abs(cy - (lane.y + lane.h)));
+          if (!contained && dist < best) { best = dist; laneId = lane.id; }
+        }
+        return { ...n, x: nx, y: ny, laneId };
+      });
+      const r = repackLanes(p.lanes, nodes);
+      return { ...p, lanes: r.lanes, nodes: r.nodes };
+    }, 'nudge-nodes');
+  }, []);
+
+  /** Apply a patch (color/style) to all selected nodes at once. */
+  const patchSelectedNodes = useCallback((patch) => {
+    const ids = selectedIdsRef.current;
+    if (!ids.length) return;
+    const idSet = new Set(ids.map(String));
+    updateProcess(p => ({
+      ...p,
+      nodes: p.nodes.map(n => idSet.has(String(n.id)) ? { ...n, ...patch } : n)
+    }));
+  }, []);
+
+  const onLaneClick = useCallback((laneIndex, rect) => {
     if (!editMode) return;
     setSelection({ kind: 'lane', id: laneIndex });
+    setModalAnchorRect(rect || null);
+  }, [editMode]);
+
+  const onEdgeClick = useCallback((edgeIndex, rect) => {
+    if (!editMode) return;
+    setSelection({ kind: 'edge', id: edgeIndex });
+    setModalAnchorRect(rect || null);
   }, [editMode]);
 
   function closeModal() {
     setSelection(null);
     setModalAnchorRect(null);
+    setInteracting(false);
+    setSelectedIds([]);
   }
+
+  /** Selection made from inside the ALƏTLƏR toolbar (not a canvas click) —
+   * there's no click point to anchor to, so the context menu falls back
+   * to its centered default position. */
+  const selectWithoutAnchor = useCallback((sel) => {
+    setSelection(sel ? { ...sel, menu: true } : sel);
+    setModalAnchorRect(null);
+  }, []);
 
   /**
    * Called continuously during drag.
@@ -402,21 +772,43 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
   }, []);
 
   /**
-   * Called once when the drag ends. Repacks the whole layout so lanes resize
-   * to fit their nodes and stack cleanly top-to-bottom.
+   * Called once when the drag ends. Repacks lanes vertically (so a lane grows
+   * to fit its nodes) and, only if the dropped node literally overlaps another,
+   * nudges it out by the minimum distance. Otherwise the node stays exactly
+   * where the user released it — free placement, no forced auto-layout.
    */
-  const onNodeMoveEnd = useCallback(() => {
+  const onNodeMoveEnd = useCallback((nodeIdOrIds) => {
+    const ids = Array.isArray(nodeIdOrIds) ? nodeIdOrIds : [nodeIdOrIds];
+    const idSet = new Set(ids.map(String));
     updateProcess(p => {
-      const r = repackLanes(p.lanes, p.nodes);
+      let nodes = p.nodes;
+      // Nudge each moved node out of any overlap (minimal, free placement).
+      for (const nid of ids) {
+        const moved = nodes.find(n => String(n.id) === String(nid));
+        if (!moved) continue;
+        const lane = p.lanes.find(l => l.id === moved.laneId);
+        const others = nodes.filter(n => !idSet.has(String(n.id)) && n.laneId === moved.laneId);
+        const { x, y } = resolveNodePlacement(
+          { x: moved.x, y: moved.y, w: moved.w, h: moved.h },
+          others,
+          { laneTop: lane ? lane.y : 0 }
+        );
+        if (x !== moved.x || y !== moved.y) {
+          nodes = nodes.map(n => String(n.id) === String(moved.id) ? { ...n, x, y } : n);
+        }
+      }
+      const r = repackLanes(p.lanes, nodes);
       return { ...p, lanes: r.lanes, nodes: r.nodes };
     });
+    /* eslint-disable-next-line */
   }, []);
 
   /**
    * Create an edge by dragging from one node's side handle to another node.
    * Avoids duplicate edges between the same pair/sides.
    */
-  const onCreateEdge = useCallback((fromId, fromSide, toId, toSide) => {
+  // Actually append the edge (skips exact duplicates).
+  const addEdge = useCallback((fromId, fromSide, toId, toSide) => {
     updateProcess(p => {
       const exists = p.edges.some(e =>
         String(e.from) === String(fromId) &&
@@ -429,13 +821,345 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
     });
   }, []);
 
-  const showModal = !editMode && selection?.kind === 'node' && process;
+  // List existing arrows the proposed one would visually cross (by "from → to").
+  const crossingsFor = useCallback((fromId, fromSide, toId, toSide) => {
+    const p = processRef.current;
+    if (!p) return [];
+    const nodeMap = Object.fromEntries(p.nodes.map(n => [String(n.id), n]));
+    const from = nodeMap[String(fromId)], to = nodeMap[String(toId)];
+    if (!from || !to) return [];
+    const newObs = p.nodes.filter(n => String(n.id) !== String(fromId) && String(n.id) !== String(toId));
+    const newPts = edgePoints(from, to, fromSide, toSide, null, newObs);
+    const hits = [];
+    p.edges.forEach(e => {
+      const ef = nodeMap[String(e.from)], et = nodeMap[String(e.to)];
+      if (!ef || !et) return;
+      // ignore an already-identical edge
+      if (String(e.from) === String(fromId) && String(e.to) === String(toId)) return;
+      const obs = p.nodes.filter(n => String(n.id) !== String(e.from) && String(n.id) !== String(e.to));
+      const pts = edgePoints(ef, et, e.s || 'right', e.e || 'left', e.via, obs);
+      if (polylinesCross(newPts, pts)) hits.push(`${e.from} → ${e.to}`);
+    });
+    return hits;
+  }, []);
+
+  const onCreateEdge = useCallback((fromId, fromSide, toId, toSide) => {
+    const crossed = crossingsFor(fromId, fromSide, toId, toSide);
+    if (crossed.length) {
+      setPendingEdge({ fromId, fromSide, toId, toSide, crossed });
+      return;
+    }
+    addEdge(fromId, fromSide, toId, toSide);
+  }, [crossingsFor, addEdge]);
+
+  const confirmPendingEdge = useCallback(() => {
+    setPendingEdge(pe => {
+      if (pe) addEdge(pe.fromId, pe.fromSide, pe.toId, pe.toSide);
+      return null;
+    });
+  }, [addEdge]);
+
+  /** Double-click-to-edit text directly on the canvas.
+   * Width stays fixed — the height auto-grows to fit the new text. */
+  const onNodeTextChange = useCallback((nodeId, text) => {
+    updateProcess(p => {
+      const newNodes = p.nodes.map(n => {
+        if (String(n.id) !== String(nodeId)) return n;
+        return { ...n, text, h: autoNodeHeight(n, text) };
+      });
+      const r = repackLanes(p.lanes, newNodes);
+      return { ...p, lanes: r.lanes, nodes: r.nodes };
+    }, `node-${nodeId}-text-inline`);
+  }, []);
+
+  /** Inline double-click edit of an edge's text label. */
+  const onEdgeLabelChange = useCallback((edgeIndex, text) => {
+    updateProcess(p => ({
+      ...p,
+      edges: p.edges.map((e, i) => i === edgeIndex ? { ...e, label: text } : e)
+    }), `edge-${edgeIndex}-label-inline`);
+  }, []);
+
+  /** Live resize while dragging a corner handle — no repack yet, for smoothness. */
+  const onNodeResize = useCallback((nodeId, x, y, w, h) => {
+    updateProcessLive(p => ({
+      ...p,
+      nodes: p.nodes.map(n => String(n.id) === String(nodeId) ? { ...n, x, y, w, h } : n)
+    }));
+  }, []);
+
+  /** Repack lanes once resizing finishes, same pattern as onNodeMoveEnd. */
+  const onNodeResizeEnd = useCallback(() => {
+    updateProcess(p => {
+      const r = repackLanes(p.lanes, p.nodes);
+      return { ...p, lanes: r.lanes, nodes: r.nodes };
+    });
+  }, []);
+
+  /** Drag an existing edge's endpoint onto a different node to reconnect it. */
+  const onEdgeReconnect = useCallback((edgeIndex, end, targetNodeId, targetSide) => {
+    updateProcess(p => ({
+      ...p,
+      edges: p.edges.map((e, i) => {
+        if (i !== edgeIndex) return e;
+        return end === 'from'
+          ? { ...e, from: targetNodeId, s: targetSide }
+          : { ...e, to: targetNodeId, e: targetSide };
+      })
+    }), `edge-${edgeIndex}-reconnect`);
+  }, []);
+
+  const LABEL_BY_SHAPE = {
+    pill: 'başlanğıc/son', rect: 'addım', diamond: 'qərar', parallelogram: 'məlumat/giriş',
+    subprocess: 'alt-proses', manualinput: 'əl daxiletmə', document: 'sənəd',
+    preparation: 'hazırlıq', delay: 'gecikmə', trapezoid: 'mərhələ'
+  };
+
+  function nextNodeId(nodes) {
+    const used = new Set(nodes.map(n => String(n.id)));
+    let n = 1;
+    while (used.has(String(n))) n++;
+    return n;
+  }
+
+  /**
+   * Create a node in a given lane at (preferX, preferY) but nudged so it never
+   * overlaps an existing node — it lands beside them with a clean gap (rule 1/3).
+   * preferX/preferY are in canvas coordinates; omit to default near the lane's start.
+   */
+  function createNode(shape, style, laneId, preferX, preferY) {
+    const p0 = processRef.current;
+    const lane0 = p0.lanes.find(l => l.id === laneId) || p0.lanes[0];
+    if (!lane0) return;
+    const id = nextNodeId(p0.nodes);
+    const defaults = nodeDefaults(shape);
+    updateProcess(p => {
+      const lane = p.lanes.find(l => l.id === laneId) || p.lanes[0];
+      if (!lane) return p;
+      const laneNodes = p.nodes.filter(n => n.laneId === lane.id);
+      const w = defaults.w, h = defaults.h;
+      const startX = preferX != null ? preferX - w / 2 : 80;
+      const startY = preferY != null ? preferY - h / 2 : lane.y + 20;
+      const { x, y } = resolveNodePlacement(
+        { x: startX, y: startY, w, h },
+        laneNodes,
+        { laneTop: lane.y }
+      );
+      const node = {
+        id, type: shape, style: style || 'solid', x, y, laneId: lane.id, w, h,
+        text: `Yeni ${LABEL_BY_SHAPE[shape] || 'addım'}`,
+        info: { general: [''] }
+      };
+      const newNodes = [...p.nodes, node];
+      const r = repackLanes(p.lanes, newNodes);
+      return { ...p, lanes: r.lanes, nodes: r.nodes };
+    });
+    setSelection({ kind: 'node', id });
+  }
+
+  /** Which lane is currently centered in the scroll viewport. */
+  function viewportLaneId() {
+    const p = processRef.current;
+    if (!p || !p.lanes.length) return null;
+    const scroller = containerRef.current?.querySelector('.diagram-canvas')?.parentElement;
+    const canvasEl = containerRef.current?.querySelector('.diagram-canvas');
+    if (!scroller || !canvasEl) return p.lanes[0].id;
+    const scRect = scroller.getBoundingClientRect();
+    const cvRect = canvasEl.getBoundingClientRect();
+    // Y in canvas coords at the vertical middle of the visible area.
+    const midCanvasY = (scRect.top + scRect.height / 2) - cvRect.top;
+    let best = p.lanes[0];
+    for (const lane of p.lanes) {
+      if (midCanvasY >= lane.y && midCanvasY < lane.y + lane.h) { best = lane; break; }
+    }
+    return best.id;
+  }
+
+  /** Sidebar CLICK: add the shape to whichever lane is in the viewport now. */
+  const onAddShape = useCallback((shape, style) => {
+    if (!processRef.current?.lanes.length) { alert('Əvvəlcə bir panel əlavə edin.'); return; }
+    const laneId = viewportLaneId();
+    createNode(shape, style, laneId);
+    /* eslint-disable-next-line */
+  }, []);
+
+  /** Canvas DROP: add the shape at the drop point, in the lane under it. */
+  const onCanvasDropShape = useCallback((shape, style, canvasX, canvasY) => {
+    const p = processRef.current;
+    if (!p?.lanes.length) { alert('Əvvəlcə bir panel əlavə edin.'); return; }
+    let laneId = p.lanes[0].id;
+    for (const lane of p.lanes) {
+      if (canvasY >= lane.y && canvasY < lane.y + lane.h) { laneId = lane.id; break; }
+    }
+    createNode(shape, style, laneId, canvasX, canvasY);
+    /* eslint-disable-next-line */
+  }, []);
+
+  /** Fix 11: archive the whole diagram from inside the editor sidebar. */
+  const onArchiveDiagram = useCallback(async () => {
+    if (!process) return;
+    if (!confirm(`"${process.title}" diaqramını arxivə köçürmək istəyirsiniz?`)) return;
+    try {
+      if (dirty) await api.updateProcess(process.id, process).catch(() => {});
+      await api.archiveProcess(process.id);
+      localStorage.removeItem(DRAFT_KEY(processId));
+      localStorage.removeItem(DRAFT_TS_KEY(processId));
+      onBack();
+    } catch (e) {
+      alert('Arxivə köçürülə bilmədi: ' + e.message);
+    }
+    /* eslint-disable-next-line */
+  }, [process, dirty]);
+
+  /* ===================== Təqdimat (presentation) ===================== */
+  // Every node walked in ascending id order (numeric-aware).
+  const presentOrder = useMemo(() => {
+    if (!process) return [];
+    return [...process.nodes].sort((a, b) => {
+      const na = Number(a.id), nb = Number(b.id);
+      if (!isNaN(na) && !isNaN(nb) && na !== nb) return na - nb;
+      return String(a.id).localeCompare(String(b.id), undefined, { numeric: true });
+    });
+  }, [process?.nodes]);
+  const presentOrderRef = useRef(presentOrder);
+  useEffect(() => { presentOrderRef.current = presentOrder; }, [presentOrder]);
+
+  function findScroller() {
+    const canvasEl = containerRef.current?.querySelector('.diagram-canvas');
+    return { canvasEl, scroller: canvasEl?.parentElement || null };
+  }
+  function scrollNodeIntoView(node, smooth = true) {
+    const { canvasEl, scroller } = findScroller();
+    if (!canvasEl || !scroller || !node) return;
+    // Work in the scroller's own coordinate space via bounding rects, so this
+    // is correct regardless of what the canvas' offsetParent happens to be.
+    const cv = canvasEl.getBoundingClientRect();
+    const sc = scroller.getBoundingClientRect();
+    const nodeLeftInContent = (cv.left - sc.left) + scroller.scrollLeft + (node.x || 0);
+    const nodeTopInContent = (cv.top - sc.top) + scroller.scrollTop + (node.y || 0);
+    const left = nodeLeftInContent + (node.w || 0) / 2 - scroller.clientWidth / 2;
+    const top = nodeTopInContent + (node.h || 0) / 2 - scroller.clientHeight / 2;
+    scroller.scrollTo({
+      left: Math.max(0, left), top: Math.max(0, top),
+      behavior: smooth ? 'smooth' : 'auto'
+    });
+  }
+  function nodeScreenRect(node) {
+    const { canvasEl } = findScroller();
+    if (!canvasEl || !node) return null;
+    const r = canvasEl.getBoundingClientRect();
+    return {
+      left: r.left + (node.x || 0), top: r.top + (node.y || 0),
+      right: r.left + (node.x || 0) + (node.w || 0),
+      bottom: r.top + (node.y || 0) + (node.h || 0),
+      width: node.w || 0, height: node.h || 0
+    };
+  }
+
+  function startPresentation() {
+    if (!process || !process.nodes.length) return;
+    setEditMode(false);
+    setFitWidth(false);
+    setPanelOpen(false);
+    setSelectedIds([]);
+    setSelection(null);
+    setModalAnchorRect(null);
+    setPresentPopup(false);
+    setPresentIndex(0);
+    setPresentPlaying(true);
+    setPresenting(true);
+  }
+  const exitPresentation = useCallback(() => {
+    setPresenting(false);
+    setPresentPlaying(false);
+    setPresentPopup(false);
+    setSelection(null);
+    setModalAnchorRect(null);
+  }, []);
+  const presentGoto = useCallback((i) => {
+    const n = presentOrderRef.current.length;
+    if (!n) return;
+    setPresentIndex(Math.max(0, Math.min(n - 1, i)));
+  }, []);
+  const presentNext = useCallback(() => {
+    setPresentIndex(i => {
+      const last = presentOrderRef.current.length - 1;
+      if (i >= last) { setPresentPlaying(false); return i; }
+      return i + 1;
+    });
+  }, []);
+  const presentPrev = useCallback(() => setPresentIndex(i => Math.max(0, i - 1)), []);
+  const presentRestart = useCallback(() => { setPresentIndex(0); setPresentPlaying(true); }, []);
+  const presentTogglePlay = useCallback(() => {
+    setPresentPlaying(p => {
+      // Pressing play again after the deck finished restarts from the top.
+      if (!p && presentIndex >= presentOrderRef.current.length - 1) { setPresentIndex(0); return true; }
+      return !p;
+    });
+  }, [presentIndex]);
+
+  // Drive each step: spotlight the node, scroll to it, then reveal the popup.
+  useEffect(() => {
+    if (!presenting) return;
+    const node = presentOrder[presentIndex];
+    if (!node) return;
+    setPresentPopup(false);
+    setSelection({ kind: 'node', id: node.id, menu: false });
+    setModalAnchorRect(null);
+    scrollNodeIntoView(node, true);
+    const t = setTimeout(() => {
+      setModalAnchorRect(nodeScreenRect(node));
+      setPresentPopup(true);
+    }, 560);
+    return () => clearTimeout(t);
+    /* eslint-disable-next-line */
+  }, [presenting, presentIndex]);
+
+  // Auto-advance while playing; stop when the last node is reached.
+  useEffect(() => {
+    if (!presenting || !presentPlaying) return;
+    if (presentIndex >= presentOrder.length - 1) { setPresentPlaying(false); return; }
+    const t = setTimeout(() => setPresentIndex(i => i + 1), presentDwell);
+    return () => clearTimeout(t);
+    /* eslint-disable-next-line */
+  }, [presenting, presentPlaying, presentIndex, presentOrder.length, presentDwell]);
+
+  // Keyboard: Esc exits, ←/→ step, Space toggles play.
+  useEffect(() => {
+    if (!presenting) return;
+    function onKey(e) {
+      if (e.key === 'Escape') { e.preventDefault(); exitPresentation(); }
+      else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { e.preventDefault(); setPresentPlaying(false); presentNext(); }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); setPresentPlaying(false); presentPrev(); }
+      else if (e.key === ' ') { e.preventDefault(); presentTogglePlay(); }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [presenting, exitPresentation, presentNext, presentPrev, presentTogglePlay]);
+
+  const presentCurrent = presenting ? presentOrder[presentIndex] : null;
+  const showModal = presenting
+    ? (presentShowPopup && presentPopup && !!presentCurrent)
+    : (!editMode && selection?.kind === 'node' && process);
+
+  // Commit the inline counter edit: jump to that 1-based position in the walk.
+  const presentJumpCommit = useCallback(() => {
+    setPresentJumpDraft(draft => {
+      if (draft != null && draft !== '') {
+        const n = presentOrderRef.current.length;
+        const pos = Math.max(1, Math.min(n, parseInt(draft, 10) || 1));
+        setPresentPlaying(false);
+        setPresentIndex(pos - 1);
+      }
+      return null;
+    });
+  }, []);
 
   return (
     <>
-      <div className="topbar">
+      <div className={`topbar ${presenting ? 'is-hidden' : ''}`}>
         <div className="top-left">
-          <button className="pill-chip back-chip" onClick={onBack}>
+          <button className="pill-chip back-chip" onClick={handleBack}>
             <ChevronLeft size={16} />
             <span className="label">{process?.title || '...'}</span>
           </button>
@@ -487,6 +1211,17 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
             </div>
           )}
 
+          {process && process.nodes.length > 0 && (
+            <button
+              className="pill-chip present-chip nospace edit-chip"
+              onClick={startPresentation}
+              title="Təqdimat rejimi — addımları avtomatik göstər"
+            >
+              <MonitorPlay size={16} />
+              <span>Təqdimat</span>
+            </button>
+          )}
+
           {!isViewer && editMode && (
             <button
               className={`pill-chip save-chip ${dirty ? 'dirty' : ''}`}
@@ -516,22 +1251,42 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
         </div>
       </div>
 
-      {!isViewer && hasDraft && !editMode && (
+      {!isViewer && hasDraft && !editMode && !presenting && (
         <div className="draft-banner">
-          <AlertCircle size={15} />
-          <span>Saxlanılmamış dəyişikliklər var.</span>
-          <button className="draft-btn primary" onClick={() => setEditMode(true)}>
-            Redaktəyə davam et
-          </button>
-          <button className="draft-btn" onClick={discardDraft}>Ləğv et</button>
+          <span className="draft-banner-icon"><AlertCircle size={16} /></span>
+          <div className="draft-banner-text">
+            <span className="draft-banner-title">Saxlanılmamış dəyişikliklər var</span>
+            {draftTs && (
+              <span className="draft-banner-time">
+                <Clock size={12} /> Son dəyişiklik: {formatDraftTime(draftTs)}
+              </span>
+            )}
+          </div>
+          <div className="draft-banner-actions">
+            <button className="draft-btn primary" onClick={() => { setEditMode(true); setPanelOpen(true); }}>
+              Redaktəyə davam et
+            </button>
+            <button className="draft-btn" onClick={discardDraft}>Ləğv et</button>
+          </div>
         </div>
       )}
 
-      <div className={`diagram-wrap ${editMode ? 'edit-mode' : ''}`}>
-        <div className="diagram-main">
+      {lockedBy && lockedBy !== '__error__' && !presenting && (
+        <div className="lock-banner">
+          <span className="lock-banner-icon"><Clock size={16} /></span>
+          <span className="lock-banner-text">
+            <b>{lockedBy}</b> hazırda bu diaqramı redaktə edir — dəyişikliklər canlı yenilənir.
+            {!editMode && ' Onlar bitirənə qədər redaktə mümkün deyil.'}
+          </span>
+        </div>
+      )}
+
+      <div className={`diagram-wrap ${editMode ? 'edit-mode' : ''} ${presenting ? 'presenting' : ''}`}>
+        <div className="diagram-main" style={themeVars(process)}>
           <div
             className={`diagram-container ${fitWidth && !editMode ? 'fit' : ''}`}
             ref={containerRef}
+            style={!isViewer && editMode && panelOpen ? { paddingTop: navbarH - 60 } : undefined}
           >
             {loading && (
               <div className="empty-state"><Loader2 size={20} className="spin" />Yüklənir...</div>
@@ -560,13 +1315,31 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
                 <DiagramCanvas
                   process={process}
                   selectedNodeId={editMode && selection?.kind === 'node' ? selection.id : null}
+                  selectedEdgeId={editMode && selection?.kind === 'edge' ? selection.id : null}
                   modalNodeId={!editMode && selection?.kind === 'node' ? selection.id : null}
                   editMode={!isViewer && editMode}
                   onNodeClick={onNodeClick}
                   onLaneClick={onLaneClick}
+                  onEdgeClick={onEdgeClick}
                   onNodeMove={onNodeMove}
                   onNodeMoveEnd={onNodeMoveEnd}
                   onCreateEdge={onCreateEdge}
+                  onNodeTextChange={onNodeTextChange}
+                  onEdgeLabelChange={onEdgeLabelChange}
+                  onNodeResize={onNodeResize}
+                  onNodeResizeEnd={onNodeResizeEnd}
+                  onEdgeReconnect={onEdgeReconnect}
+                  onBackgroundClick={closeModal}
+                  onSelectedRectChange={setModalAnchorRect}
+                  onNodeInteractionStart={() => setInteracting(true)}
+                  onNodeInteractionEnd={() => setInteracting(false)}
+                  onCanvasDropShape={onCanvasDropShape}
+                  selectedNodeIds={selectedIds}
+                  onMarqueeSelect={onMarqueeSelect}
+                  onClearMultiSelect={() => setSelectedIds([])}
+                  patchSelectedNodes={patchSelectedNodes}
+                  deleteSelectedNodes={deleteSelectedNodes}
+                  presentActiveId={presenting ? (presentCurrent?.id ?? null) : null}
                 />
               );
               return scale < 1
@@ -580,22 +1353,155 @@ export default function Diagram({ processId, focusNodeId, onBack, onLogout }) {
           <AdminPanel
             process={process}
             selection={selection}
-            setSelection={setSelection}
+            setSelection={selectWithoutAnchor}
             updateProcess={updateProcess}
             onClose={() => setPanelOpen(false)}
+            onHeightChange={setNavbarH}
+            onSidebarChange={setSidebarOpen}
+            addStyle={addStyle}
+            setAddStyle={setAddStyle}
+            onAddShape={onAddShape}
+            onArchive={onArchiveDiagram}
+          />
+        )}
+
+        {!isViewer && editMode && selection && selection.menu !== false && process && !interacting && (
+          <SelectionMenu
+            selection={selection}
+            process={process}
+            updateProcess={updateProcess}
+            setSelection={setSelection}
+            anchorRect={modalAnchorRect}
           />
         )}
       </div>
 
+      {presenting && (
+        <div className="present-bar" onMouseDown={e => e.stopPropagation()}>
+          <button className="present-btn" onClick={presentRestart} title="Əvvələ qayıt">
+            <RotateCcw size={18} />
+          </button>
+          <button className="present-btn" onClick={() => { setPresentPlaying(false); presentPrev(); }}
+            disabled={presentIndex <= 0} title="Əvvəlki">
+            <SkipBack size={18} />
+          </button>
+          <button className="present-btn play" onClick={presentTogglePlay}
+            title={presentPlaying ? 'Dayandır' : 'Oynat'}>
+            {presentPlaying ? <Pause size={20} /> : <Play size={20} />}
+          </button>
+          <button className="present-btn" onClick={() => { setPresentPlaying(false); presentNext(); }}
+            disabled={presentIndex >= presentOrder.length - 1} title="Növbəti">
+            <SkipForward size={18} />
+          </button>
+
+          <div className="present-count" title="Nömrəyə keçmək üçün klikləyin">
+            {presentJumpDraft != null ? (
+              <input
+                className="present-jump-input"
+                type="number"
+                min={1}
+                max={presentOrder.length}
+                autoFocus
+                value={presentJumpDraft}
+                onChange={e => setPresentJumpDraft(e.target.value)}
+                onBlur={presentJumpCommit}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') { e.preventDefault(); presentJumpCommit(); }
+                  else if (e.key === 'Escape') { e.preventDefault(); setPresentJumpDraft(null); }
+                }}
+              />
+            ) : (
+              <button
+                className="present-jump-btn"
+                onClick={() => setPresentJumpDraft(String(presentIndex + 1))}
+                title="Nömrəyə keçmək üçün klikləyin"
+              >
+                {presentIndex + 1}
+              </button>
+            )}
+            <span className="present-count-total"> / {presentOrder.length}</span>
+          </div>
+
+          <div className="present-sep" />
+
+          <button
+            className={`present-btn ${presentShowPopup ? 'on' : ''}`}
+            onClick={() => setPresentShowPopup(v => !v)}
+            title={presentShowPopup ? 'Popup-u gizlət' : 'Popup-u göstər'}
+          >
+            {presentShowPopup ? <Eye size={18} /> : <EyeOff size={18} />}
+          </button>
+
+          <label className="present-speed" title="Hər node üçün müddət">
+            <Clock size={15} />
+            <input
+              type="range"
+              min={1}
+              max={10}
+              step={1}
+              value={Math.round(presentDwell / 1000)}
+              onChange={e => setPresentDwell(Number(e.target.value) * 1000)}
+            />
+            <span className="present-speed-val">{Math.round(presentDwell / 1000)}s</span>
+          </label>
+
+          <div className="present-sep" />
+          <button className="present-btn exit" onClick={exitPresentation} title="Təqdimatdan çıx (Esc)">
+            <X size={18} />
+          </button>
+        </div>
+      )}
+
       {showModal && (
         <NodeModal
-          node={process.nodes.find(n => String(n.id) === String(selection.id))}
-          onClose={closeModal}
+          node={presenting
+            ? presentCurrent
+            : process.nodes.find(n => String(n.id) === String(selection.id))}
+          onClose={presenting ? () => {} : closeModal}
           anchorRect={modalAnchorRect}
+          presentation={presenting}
         />
+      )}
+
+      {pendingEdge && (
+        <div className="confirm-backdrop" onClick={() => setPendingEdge(null)}>
+          <div className="confirm-card" onClick={e => e.stopPropagation()}>
+            <div className="confirm-title">Oxlar kəsişir</div>
+            <p className="confirm-text">
+              Bu ox mövcud {pendingEdge.crossed.length > 1 ? 'oxlarla' : 'oxu ilə'} kəsişir:{' '}
+              <b>{pendingEdge.crossed.join(', ')}</b>. Yenə də əlavə edilsin?
+            </p>
+            <div className="confirm-actions">
+              <button className="confirm-btn ghost" onClick={() => setPendingEdge(null)}>
+                Ləğv et
+              </button>
+              <button className="confirm-btn primary" onClick={confirmPendingEdge}>
+                Bəli, əlavə et
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </>
   );
+}
+
+function themeVars(process) {
+  const t = process?.theme || {};
+  let s = {};
+  if (t.node) {
+    const vars = deriveAccentVars(t.node);
+    if (vars) s = { ...s, ...vars };
+  }
+  if (t.lane) {
+    const vars = deriveLaneVars(t.lane);
+    if (vars) s = { ...s, ...vars };
+  }
+  if (t.edge) {
+    const vars = deriveEdgeVars(t.edge);
+    if (vars) s = { ...s, ...vars };
+  }
+  return s;
 }
 
 function normalizeProcess(p) {
@@ -605,12 +1511,21 @@ function normalizeProcess(p) {
     y: l.y ?? 0,
     h: l.h ?? LANE_MIN_H
   }));
+  // Coerce any legacy colour-objects (theme / per-node / per-edge) into plain
+  // strings so nothing downstream ever calls a string method on an object.
+  const nodes = (p.nodes || []).map(n =>
+    (n.color != null && typeof n.color !== 'string') ? { ...n, color: asColorString(n.color) } : n
+  );
+  const edges = (p.edges || []).map(e =>
+    (e.color != null && typeof e.color !== 'string') ? { ...e, color: asColorString(e.color) } : e
+  );
   return {
     ...p,
+    theme: normalizeTheme(p.theme),
     width: p.width || 1200,
     height: p.height || 600,
     lanes,
-    nodes: p.nodes || [],
-    edges: p.edges || []
+    nodes,
+    edges
   };
 }

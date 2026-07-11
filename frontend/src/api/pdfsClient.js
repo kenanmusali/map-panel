@@ -11,7 +11,7 @@ function authHeaders(extra = {}) {
 
 async function jsonRequest(method, path, body) {
   const headers = authHeaders({ 'Content-Type': 'application/json' });
-  const res = await fetch(`${API_URL}${path}`, {
+  const res = await `${API_URL}${path}`, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined
@@ -96,6 +96,9 @@ export const pdfsApi = {
   },
 
   remove: (id) => jsonRequest('DELETE', `/api/pdfs/${id}`),
+
+  archive: (id) => jsonRequest('POST', `/api/pdfs/${id}/archive`),
+  unarchive: (id) => jsonRequest('POST', `/api/pdfs/${id}/unarchive`),
 
   async view(id) {
     const blob = await fetchBlob(id);

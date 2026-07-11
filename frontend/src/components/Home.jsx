@@ -4,9 +4,12 @@ import {
   Search, LogOut, Plus, Loader2, Trash2, ChevronLeft,
   ChevronRight, ChevronDown, Folder, FolderOpen, FolderPlus, Pencil, Edit3, GripVertical
 } from './icons.jsx';
+import { Archive, ArchiveRestore } from 'lucide-react';
 import { api, setToken } from '../api/client.js';
 import NameModal from './NameModal.jsx';
 import TitleEditButton from './TitleEditButton.jsx';
+import { importDiagramFromExcel, downloadTemplate } from './excel.js';
+import { importDiagramFromJson } from './diagramExport.js';
 
 function fmtTime(d) {
   const h = d.getHours();
@@ -26,12 +29,15 @@ export default function Home({ onOpen, onLogout, onBack }) {
   const [query, setQuery] = useState('');
   const [groups, setGroups] = useState([]);
   const [processes, setProcesses] = useState([]);
+  const [archived, setArchived] = useState([]);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [expanded, setExpanded] = useState({});   // groupId -> bool
   const [modal, setModal] = useState(null);        // see types below
   const [busy, setBusy] = useState(false);
   const [settings, setSettings] = useState(null);
+  const [pendingArchive, setPendingArchive] = useState(null); // process id awaiting confirm
 
   // ---- drag & drop ordering ----
   const groupDrag = useRef(null);          // gid being dragged
@@ -64,6 +70,7 @@ export default function Home({ onOpen, onLogout, onBack }) {
       const gs = data.groups || [];
       setGroups(gs);
       setProcesses(data.processes || []);
+      setArchived(data.archived || []);
       // expand all groups by default the first time
       setExpanded(prev => {
         if (Object.keys(prev).length) return prev;
@@ -141,22 +148,27 @@ export default function Home({ onOpen, onLogout, onBack }) {
     if (!d || Number(d.gid) !== Number(gid) || d.id === id) return;
     e.preventDefault();
     e.stopPropagation();
-    const groupItems = processes.filter(p => Number(p.groupId) === Number(gid));
-    const order = groupItems.map(p => p.id);
-    const fi = order.indexOf(d.id);
-    const ti = order.indexOf(id);
+
+    // Reorder only the ids that belong to this group, then rebuild the full
+    // list by walking the original order and swapping in the new sequence for
+    // this group. Guard against any id going missing so we never inject
+    // `undefined` into `processes` (which used to crash the render).
+    const groupIds = processes.filter(p => Number(p.groupId) === Number(gid)).map(p => p.id);
+    const fi = groupIds.indexOf(d.id);
+    const ti = groupIds.indexOf(id);
     if (fi < 0 || ti < 0) return;
-    order.splice(ti, 0, order.splice(fi, 1)[0]);
+    groupIds.splice(ti, 0, groupIds.splice(fi, 1)[0]);
+
+    const byId = new Map(processes.map(p => [p.id, p]));
     let k = 0;
     const reordered = processes.map(p => {
-      if (Number(p.groupId) === Number(gid)) {
-        const nid = order[k++];
-        return groupItems.find(x => x.id === nid);
-      }
-      return p;
-    });
+      if (Number(p.groupId) !== Number(gid)) return p;
+      const nid = groupIds[k++];
+      return byId.get(nid) || p; // fall back to original if anything is off
+    }).filter(Boolean);
+
     setProcesses(reordered); // optimistic
-    try { await api.reorderProcesses(Number(gid), order); } catch { load(); }
+    try { await api.reorderProcesses(Number(gid), groupIds); } catch { load(); }
   }
   function onItemDragEnd() { itemDrag.current = null; setItemOver(null); }
 
@@ -199,6 +211,40 @@ export default function Home({ onOpen, onLogout, onBack }) {
       alert('Xəta: ' + e.message);
     } finally { setBusy(false); }
   }
+  async function importDiagramExcel(file, { groupId } = {}) {
+    const data = await importDiagramFromExcel(file);
+    const p = await api.createProcess({
+      title: data.title,
+      subtitle: data.subtitle || '',
+      groupId: groupId || modal?.groupId,
+      width: data.width || 2200,
+      height: data.height || 900,
+      lanes: data.lanes || [],
+      nodes: data.nodes || [],
+      edges: data.edges || [],
+      ...(data.theme ? { theme: data.theme } : {})
+    });
+    setModal(null);
+    await load();
+    onOpen(p.id);
+  }
+  async function importDiagramJson(file, { groupId } = {}) {
+    const data = await importDiagramFromJson(file);
+    const p = await api.createProcess({
+      title: data.title,
+      subtitle: data.subtitle || '',
+      groupId: groupId || modal?.groupId,
+      width: data.width || 2200,
+      height: data.height || 900,
+      lanes: data.lanes || [],
+      nodes: data.nodes || [],
+      edges: data.edges || [],
+      ...(data.theme ? { theme: data.theme } : {})
+    });
+    setModal(null);
+    await load();
+    onOpen(p.id);
+  }
   async function saveDiagramEdit({ name, subtitle, groupId }) {
     await api.updateProcessMeta(modal.proc.id, { title: name, subtitle, groupId });
     setModal(null);
@@ -210,6 +256,40 @@ export default function Home({ onOpen, onLogout, onBack }) {
     try {
       await api.deleteProcess(p.id);
       setProcesses(prev => prev.filter(x => x.id !== p.id));
+    } catch (err) { alert('Silinə bilmədi: ' + err.message); }
+  }
+
+  /* ---------- archive (two-step: ask, then confirm) ---------- */
+  function requestArchive(e, p) {
+    e.stopPropagation();
+    setPendingArchive(p.id);
+  }
+  function cancelArchive(e) {
+    e.stopPropagation();
+    setPendingArchive(null);
+  }
+  async function confirmArchive(e, p) {
+    e.stopPropagation();
+    try {
+      await api.archiveProcess(p.id);
+      setPendingArchive(null);
+      await load();
+      setArchiveOpen(true);
+    } catch (err) { alert('Arxivə köçürülə bilmədi: ' + err.message); }
+  }
+  async function unarchiveProcess(e, p) {
+    e.stopPropagation();
+    try {
+      await api.unarchiveProcess(p.id);
+      await load();
+    } catch (err) { alert('Bərpa edilə bilmədi: ' + err.message); }
+  }
+  async function deleteArchived(e, p) {
+    e.stopPropagation();
+    if (!confirm(`"${p.title}" diaqramını tamamilə silmək istəyirsiniz? Geri alına bilməz.`)) return;
+    try {
+      await api.deleteProcess(p.id);
+      setArchived(prev => prev.filter(x => x.id !== p.id));
     } catch (err) { alert('Silinə bilmədi: ' + err.message); }
   }
 
@@ -269,13 +349,21 @@ export default function Home({ onOpen, onLogout, onBack }) {
           {loading && <div className="empty-state"><Loader2 size={20} className="spin" />Yüklənir...</div>}
           {error && !loading && <div className="empty-state error">{error}</div>}
           {noResults && <div className="empty-state">Heç bir qrup yoxdur</div>}
+        {!isViewer && !loading && (
+            <button className="process-item create-btn" onClick={() => setModal({ type: 'group-create' })} disabled={busy}>
+              <div className="num"><FolderPlus size={20} /></div>
+              <div className="label">Yeni qrup yarat</div>
+            </button>
+          )}
 
           {!loading && !error && groups.map((g, gi) => {
-            const fullItems = processes.filter(p => Number(p.groupId) === Number(g.id));
+            const fullItems = processes.filter(p => p && Number(p.groupId) === Number(g.id));
             const items = fullItems.filter(matches);
             const total = fullItems.length;
             // hide a group if searching and it has no matches
             if (q && items.length === 0) return null;
+            // viewers never see empty folders (nothing to do with them)
+            if (isViewer && total === 0) return null;
             const isOpen = q ? true : !!expanded[g.id];
             const dndOn = !isViewer && !q;
             const folderNo = gi + 1;
@@ -360,14 +448,34 @@ export default function Home({ onOpen, onLogout, onBack }) {
                           </div>
                           {!isViewer && (
                             <div className="row-actions" onClick={e => e.stopPropagation()}>
-                              <button className="delete-archive-btn" title="Redaktə et"
-                                onClick={() => setModal({ type: 'diagram-edit', proc: p })}>
-                                <Edit3 size={16} />
-                              </button>
-                              <button className="delete-archive-btn" title="Sil"
-                                onClick={(e) => deleteProcess(e, p)}>
-                                <Trash2 size={16} />
-                              </button>
+                              {pendingArchive === p.id ? (
+                                <div className="archive-confirm">
+                                  <span className="archive-confirm-q"> </span>
+                                  <button className="action-btn confirm-yes" title="Təsdiq et"
+                                    onClick={(e) => confirmArchive(e, p)}>
+                                    <Archive size={15} /><span>Təsdiq</span>
+                                  </button>
+                                  <button className="action-btn" title="Ləğv et"
+                                    onClick={cancelArchive}>
+                                    <span>Ləğv</span>
+                                  </button>
+                                </div>
+                              ) : (
+                                <>
+                                  <button className="action-btn" title="Redaktə et"
+                                    onClick={() => setModal({ type: 'diagram-edit', proc: p })}>
+                                    <Edit3 size={16} />
+                                  </button>
+                                  <button className="action-btn" title="Arxivə köçür"
+                                    onClick={(e) => requestArchive(e, p)}>
+                                    <Archive size={16} />
+                                  </button>
+                                  <button className="action-btn" title="Sil"
+                                    onClick={(e) => deleteProcess(e, p)}>
+                                    <Trash2 size={16} />
+                                  </button>
+                                </>
+                              )}
                             </div>
                           )}
                         </div>
@@ -379,12 +487,49 @@ export default function Home({ onOpen, onLogout, onBack }) {
             );
           })}
 
-          {!isViewer && !loading && (
-            <button className="process-item create-btn" onClick={() => setModal({ type: 'group-create' })} disabled={busy}>
-              <div className="num"><FolderPlus size={20} /></div>
-              <div className="label">Yeni qrup yarat</div>
-            </button>
-          )}
+  
+          {!isViewer && !loading && !error && archived.length > 0 && (() => {
+            const items = archived.filter(matches);
+            if (q && items.length === 0) return null;
+            const isOpen = q ? true : archiveOpen;
+            return (
+              <div className={`group-card archive-card ${isOpen ? 'open' : ''}`}>
+                <div className="group-head" onClick={() => setArchiveOpen(v => !v)}>
+                  <span className="group-chevron">
+                    {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                  </span>
+                  <span className="group-folder"><Archive size={17} /></span>
+                  <span className="group-name">Arxiv</span>
+                  <span className="group-count">{archived.length}</span>
+                </div>
+                {isOpen && (
+                  <div className="group-body">
+                    {items.map((p) => (
+                      <div key={p.id} className="process-item diagram-row archived-row" onClick={() => onOpen(p.id)}>
+                        <div className="num"><Archive size={14} /></div>
+                        <div className="label">
+                          <span className="row-title">{p.title}</span>
+                          {p.subtitle ? <span className="row-subtitle">{p.subtitle}</span> : null}
+                        </div>
+                        {!isViewer && (
+                          <div className="row-actions" onClick={e => e.stopPropagation()}>
+                            <button className="action-btn" title="Arxivdən çıxar"
+                              onClick={(e) => unarchiveProcess(e, p)}>
+                              <ArchiveRestore size={16} />
+                            </button>
+                            <button className="action-btn" title="Tamamilə sil"
+                              onClick={(e) => deleteArchived(e, p)}>
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
 
@@ -400,7 +545,9 @@ export default function Home({ onOpen, onLogout, onBack }) {
         <NameModal heading="Yeni diaqram" nameLabel="Diaqram adı" withSubtitle
           withGroup groups={groups} groupId0={modal.groupId}
           namePlaceholder="Əsas ad" subtitlePlaceholder="Qısa ikinci ad (məcburi deyil)"
-          saveLabel="Yarat və aç" onClose={() => setModal(null)} onSave={saveDiagramCreate} />
+          saveLabel="Yarat və aç"
+          withImport onImport={importDiagramExcel} onImportJson={importDiagramJson} onTemplate={downloadTemplate}
+          onClose={() => setModal(null)} onSave={saveDiagramCreate} />
       )}
       {modal?.type === 'diagram-edit' && (
         <NameModal heading="Diaqramı redaktə et" nameLabel="Diaqram adı" withSubtitle

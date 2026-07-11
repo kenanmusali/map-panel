@@ -1,12 +1,28 @@
 {
   "groups": [
     {
-      "id": 1,
-      "name": "Ümumi"
+      "id": 6,
+      "name": "Tırpark və Minik avtomobillərinin dayanacağı şöbəsi"
+    },
+    {
+      "id": 4,
+      "name": "Testing how it works"
     },
     {
       "id": 2,
       "name": "Test Workflows (EN)"
+    },
+    {
+      "id": 1,
+      "name": "Ümumi"
+    },
+    {
+      "id": 3,
+      "name": "Salalm"
+    },
+    {
+      "id": 5,
+      "name": "HR - Human Resources"
     }
   ],
   "processes": [
@@ -17,21 +33,9 @@
       "groupId": 1
     },
     {
-      "id": 2,
-      "title": "Dəmir yolu ilə daxil olan yüklərə dair sənədlərin çeşidlənməsi prosesi",
-      "subtitle": "ALM-X1-C1",
-      "groupId": 1
-    },
-    {
       "id": 3,
       "title": "Dəmir yolu ilə idxal olunan vaqon yüklərinin yük avtomobilinə boşaldılması və müştəriyə təhvil verilməsi iş axını",
       "subtitle": "ALM-X1-C1",
-      "groupId": 1
-    },
-    {
-      "id": 4,
-      "title": "test",
-      "subtitle": "",
       "groupId": 1
     },
     {
@@ -45,6 +49,42 @@
       "title": "E-commerce Order Fulfillment",
       "subtitle": "TEST-EN-LONG-33",
       "groupId": 2
+    },
+    {
+      "id": 103,
+      "title": "Starting",
+      "subtitle": "STRG-0207-26",
+      "groupId": 4
+    },
+    {
+      "id": 103,
+      "title": "Helo",
+      "subtitle": "",
+      "groupId": 3
+    },
+    {
+      "id": 105,
+      "title": "HR İşə Qəbul və Adaptasiya Prosesi - Tam İş Axını",
+      "subtitle": "HR-DEPT-V1-030726",
+      "groupId": 5
+    },
+    {
+      "id": 106,
+      "title": "Terminal prosesləri ilə əlaqədar boş yük avtomobillərinin Tırparka girişi və Mərkəzdən çıxışı iş axışı",
+      "subtitle": "ALM-IMS-PRD-TP-01",
+      "groupId": 6
+    },
+    {
+      "id": 107,
+      "title": "Terminal prosesləri ilə əlaqədar dolu yük avtomobillərinin Mərkəzə girişi və çıxışı iş axışı",
+      "subtitle": "ALM-IMS-PRD-TP-01",
+      "groupId": 6
+    },
+    {
+      "id": 108,
+      "title": "lllll",
+      "subtitle": "lll",
+      "groupId": 6
     }
   ]
 }

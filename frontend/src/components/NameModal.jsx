@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { X, Loader2 } from './icons.jsx';
+import { FileSpreadsheet, Download, FileJson } from 'lucide-react';
 
 // Generic modal: heading + name field (+ optional subtitle + optional group select).
 // onSave({ name, subtitle, groupId }) may be async.
+// Optional Excel import: pass withImport + onImport(file, { groupId }) (async) and
+// optionally onTemplate() to offer a template download.
 export default function NameModal({
   heading,
   nameLabel = 'Ad',
@@ -16,6 +19,10 @@ export default function NameModal({
   name0 = '',
   subtitle0 = '',
   saveLabel = 'Saxla',
+  withImport = false,
+  onImport,
+  onImportJson,
+  onTemplate,
   onClose,
   onSave
 }) {
@@ -23,7 +30,40 @@ export default function NameModal({
   const [subtitle, setSubtitle] = useState(subtitle0);
   const [groupId, setGroupId] = useState(groupId0 ?? (groups[0]?.id ?? null));
   const [saving, setSaving] = useState(false);
+  const [importing, setImporting] = useState(false);
   const [error, setError] = useState('');
+  const fileRef = useRef(null);
+  const jsonRef = useRef(null);
+
+  async function pickFile(e) {
+    const file = e.target.files?.[0];
+    if (fileRef.current) fileRef.current.value = '';
+    if (!file) return;
+    if (withGroup && !groupId) { setError('Əvvəlcə qrup seçin'); return; }
+    setImporting(true);
+    setError('');
+    try {
+      await onImport(file, { groupId: withGroup ? Number(groupId) : undefined });
+    } catch (err) {
+      setError(err.message || 'Excel oxuna bilmədi');
+      setImporting(false);
+    }
+  }
+
+  async function pickJson(e) {
+    const file = e.target.files?.[0];
+    if (jsonRef.current) jsonRef.current.value = '';
+    if (!file) return;
+    if (withGroup && !groupId) { setError('Əvvəlcə qrup seçin'); return; }
+    setImporting(true);
+    setError('');
+    try {
+      await onImportJson(file, { groupId: withGroup ? Number(groupId) : undefined });
+    } catch (err) {
+      setError(err.message || 'JSON oxuna bilmədi');
+      setImporting(false);
+    }
+  }
 
   async function submit(e) {
     e.preventDefault();
@@ -87,14 +127,75 @@ export default function NameModal({
             </div>
           )}
 
+          {withImport && (
+            <div className="nm-import">
+              <div className="nm-import-div"><span>və ya</span></div>
+              <input
+                ref={fileRef}
+                type="file"
+                accept=".xlsx,.xls"
+                style={{ display: 'none' }}
+                onChange={pickFile}
+              />
+              <button
+                type="button"
+                className="nm-import-btn"
+                onClick={() => fileRef.current?.click()}
+                disabled={importing || saving}
+              >
+                {importing
+                  ? <Loader2 size={16} className="spin" />
+                  : <FileSpreadsheet size={16} />}
+                <span>{importing ? 'Oxunur...' : 'Excel-dən idxal et'}</span>
+              </button>
+              {onImportJson && (
+                <>
+                  <input
+                    ref={jsonRef}
+                    type="file"
+                    accept=".json,application/json"
+                    style={{ display: 'none' }}
+                    onChange={pickJson}
+                  />
+                  <button
+                    type="button"
+                    className="nm-import-btn"
+                    style={{ marginTop: 8 }}
+                    onClick={() => jsonRef.current?.click()}
+                    disabled={importing || saving}
+                  >
+                    {importing
+                      ? <Loader2 size={16} className="spin" />
+                      : <FileJson size={16} />}
+                    <span>{importing ? 'Oxunur...' : 'JSON-dan idxal et'}</span>
+                  </button>
+                </>
+              )}
+              {onTemplate && (
+                <button
+                  type="button"
+                  className="nm-import-tpl"
+                  onClick={onTemplate}
+                  disabled={importing || saving}
+                >
+                  <Download size={13} />
+                  <span>Nümunə Excel şablonu yüklə</span>
+                </button>
+              )}
+              <p className="nm-import-hint">
+                Excel və ya JSON faylı bütün panelləri, node-ları və oxları avtomatik yeni diaqrama çevirir.
+              </p>
+            </div>
+          )}
+
           {error && <div className="pdf-modal-error">{error}</div>}
         </div>
 
         <div className="pdf-modal-foot">
-          <button type="button" className="pdf-modal-btn" onClick={onClose} disabled={saving}>
+          <button type="button" className="pdf-modal-btn" onClick={onClose} disabled={saving || importing}>
             Ləğv et
           </button>
-          <button type="submit" className="pdf-modal-btn pdf-modal-btn-primary" disabled={saving}>
+          <button type="submit" className="pdf-modal-btn pdf-modal-btn-primary" disabled={saving || importing}>
             {saving && <Loader2 size={14} className="spin" />}
             <span>{saving ? 'Saxlanılır...' : saveLabel}</span>
           </button>

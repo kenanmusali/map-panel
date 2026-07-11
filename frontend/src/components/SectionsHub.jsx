@@ -3,6 +3,8 @@ import { LogoFull } from './Logo.jsx';
 import { LogOut } from './icons.jsx';
 import { api, setToken } from '../api/client.js';
 import TitleEditButton from './TitleEditButton.jsx';
+import Welcome1Img from '../assets/welcome/1.png';
+import Welcome2Img from '../assets/welcome/2.png';
 
 function fmtTime(d) {
   const h = d.getHours();
@@ -103,7 +105,7 @@ export default function SectionsHub({ onPick, onLogout }) {
         <div className="sections-grid">
           <div className="tile-wrap">
             <button className="section-tile" onClick={() => onPick('diagrams')}>
-              <div className="section-tile-icon"><DiagramTileIcon /></div>
+              <div className="section-tile-icon"><img src={Welcome2Img} /></div>
               <div className="section-tile-title">{t('hub_diagrams_title', 'İş Axışları')}</div>
               <div className="section-tile-sub">{t('hub_diagrams_sub', 'Proses xəritələri')}</div>
             </button>
@@ -122,9 +124,10 @@ export default function SectionsHub({ onPick, onLogout }) {
             )}
           </div>
 
+
           <div className="tile-wrap">
             <button className="section-tile" onClick={() => onPick('pdfs')}>
-              <div className="section-tile-icon"><PdfTileIcon /></div>
+              <div className="section-tile-icon"><img src={Welcome1Img} /></div>
               <div className="section-tile-title">{t('hub_pdf_title', 'Normativ Sənədlər')}</div>
               <div className="section-tile-sub">{t('hub_pdf_sub', 'Prosedurlar, prosesler, əsəsnamələr')}</div>
             </button>

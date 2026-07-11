@@ -2,10 +2,12 @@ import { useState } from 'react';
 import { LogoMark } from './Logo.jsx';
 import { api, setToken } from '../api/client.js';
 import { Loader2 } from './icons.jsx';
+import BgLogin from '../assets/welcome/login.png';
+import Logo from '../assets/welcome/header-logo.svg';
 
 export default function Login({ onLogin }) {
 
-  const [username, setUsername] = useState('admin');
+  const [username, setUsername] = useState('');
 
   const [password, setPassword] = useState('');
 
@@ -56,13 +58,13 @@ export default function Login({ onLogin }) {
 
   return (
     <div className="login-wrap">
-
+<img src={BgLogin}  />
       <form
         className="login-card"
         onSubmit={submit}
       >
 
-        <LogoMark size={72} />
+     <img src={Logo}  />
 
         <h1>
           ABŞERON LOGİSTİKA MƏRKƏZİ
@@ -131,11 +133,11 @@ export default function Login({ onLogin }) {
 
         </button>
 
-        <div className="login-hint">
+        {/* <div className="login-hint">
           admin / admin123
           <br />
           user / user123
-        </div>
+        </div> */}
 
       </form>
 

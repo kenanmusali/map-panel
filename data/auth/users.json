@@ -1,0 +1,44 @@
+{
+  "items": [
+    {
+      "username": "superadmin",
+      "displayName": "Super Admin",
+      "passwordHash": "$2a$08$vhIPGYdcArxyRrmHhWIGA.fJrN0KmrsHZxUWPi0WOh9dkbE5NmH3a",
+      "role": "superadmin",
+      "tenantId": null,
+      "disabled": false,
+      "createdAt": "2026-07-08T09:35:47.241Z",
+      "createdBy": "system"
+    },
+    {
+      "username": "kenan_admin",
+      "displayName": "Kenan Musali",
+      "passwordHash": "$2a$08$Zz./5gEgA4djy74Y/ECY0OO7P30ScOYTDhwG.SQQccaWXTFh.7ZYS",
+      "role": "admin",
+      "tenantId": "main",
+      "disabled": false,
+      "createdAt": "2026-07-08T09:37:54.523Z",
+      "createdBy": "superadmin"
+    },
+    {
+      "username": "namig_admin",
+      "displayName": "Namig Naghiyev",
+      "passwordHash": "$2a$08$lus/YAuRcPA6veokFP.PvuYq905wT0KeVaBruExjVZoQ8vVsm9Y.q",
+      "role": "admin",
+      "tenantId": "main",
+      "disabled": false,
+      "createdAt": "2026-07-08T09:43:42.634Z",
+      "createdBy": "superadmin"
+    },
+    {
+      "username": "user",
+      "displayName": "User",
+      "passwordHash": "$2a$08$uO3v5hI0DEKRiwh4A2I13.8IRja2hArGLPqFJEBSqqS8owi7Uh0Ne",
+      "role": "viewer",
+      "tenantId": "main",
+      "disabled": false,
+      "createdAt": "2026-07-08T09:51:15.645Z",
+      "createdBy": "superadmin"
+    }
+  ]
+}

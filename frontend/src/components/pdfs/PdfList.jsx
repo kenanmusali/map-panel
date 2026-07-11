@@ -4,6 +4,7 @@ import {
   ChevronLeft, ChevronRight, ChevronDown, LogOut, Plus, Loader2, Trash2,
   Eye, Edit3, Search, Folder, FolderOpen, FolderPlus, Pencil, GripVertical
 } from '../icons.jsx';
+import { Archive, ArchiveRestore } from 'lucide-react';
 import { api, setToken } from '../../api/client.js';
 import { pdfsApi } from '../../api/pdfsClient.js';
 import PdfFormModal from './PdfFormModal.jsx';
@@ -43,6 +44,8 @@ export default function PdfList({ onBack, onLogout }) {
   const [now, setNow] = useState(new Date());
   const [groups, setGroups] = useState([]);
   const [pdfs, setPdfs] = useState([]);
+  const [archived, setArchived] = useState([]);
+  const [archiveOpen, setArchiveOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -51,6 +54,7 @@ export default function PdfList({ onBack, onLogout }) {
   const [modal, setModal] = useState(null); // pdf modal: {mode, pdf?, defaultGroupId?}
   const [gmodal, setGmodal] = useState(null); // group modal: {type:'create'|'rename', group?}
   const [settings, setSettings] = useState(null);
+  const [pendingArchive, setPendingArchive] = useState(null); // pdf id awaiting confirm
 
   // ---- drag & drop ordering ----
   const groupDrag = useRef(null);
@@ -83,6 +87,7 @@ export default function PdfList({ onBack, onLogout }) {
       const list = data.pdfs || []; // keep stored order (drag & drop reordering)
       setGroups(gs);
       setPdfs(list);
+      setArchived(data.archived || []);
       setExpanded(prev => {
         if (Object.keys(prev).length) return prev;
         const o = {}; gs.forEach(g => { o[g.id] = true; }); return o;
@@ -152,18 +157,18 @@ export default function PdfList({ onBack, onLogout }) {
     if (!d || Number(d.gid) !== Number(gid) || d.id === id) return;
     e.preventDefault();
     e.stopPropagation();
-    const groupItems = pdfs.filter(p => Number(p.groupId) === Number(gid));
-    const order = groupItems.map(p => p.id);
-    const fi = order.indexOf(d.id), ti = order.indexOf(id);
+    const groupIds = pdfs.filter(p => Number(p.groupId) === Number(gid)).map(p => p.id);
+    const fi = groupIds.indexOf(d.id), ti = groupIds.indexOf(id);
     if (fi < 0 || ti < 0) return;
-    order.splice(ti, 0, order.splice(fi, 1)[0]);
+    groupIds.splice(ti, 0, groupIds.splice(fi, 1)[0]);
+    const byId = new Map(pdfs.map(p => [p.id, p]));
     let k = 0;
     const reordered = pdfs.map(p => {
-      if (Number(p.groupId) === Number(gid)) { return groupItems.find(x => x.id === order[k++]); }
-      return p;
-    });
+      if (Number(p.groupId) !== Number(gid)) return p;
+      return byId.get(groupIds[k++]) || p;
+    }).filter(Boolean);
     setPdfs(reordered);
-    try { await pdfsApi.reorderPdfs(Number(gid), order); } catch { load(); }
+    try { await pdfsApi.reorderPdfs(Number(gid), groupIds); } catch { load(); }
   }
   function onItemDragEnd() { itemDrag.current = null; setItemOver(null); }
 
@@ -185,6 +190,38 @@ export default function PdfList({ onBack, onLogout }) {
     try {
       await pdfsApi.remove(p.id);
       setPdfs(prev => prev.filter(x => x.id !== p.id));
+    } catch (err) { alert('Silinə bilmədi: ' + err.message); }
+  }
+
+  /* ---------- archive (two-step: ask, then confirm) ---------- */
+  function requestArchive(e, p) {
+    e.stopPropagation();
+    setPendingArchive(p.id);
+  }
+  function cancelArchive(e) {
+    e.stopPropagation();
+    setPendingArchive(null);
+  }
+  async function confirmArchive(e, p) {
+    e.stopPropagation();
+    try {
+      await pdfsApi.archive(p.id);
+      setPendingArchive(null);
+      await load();
+      setArchiveOpen(true);
+    } catch (err) { alert('Arxivə köçürülə bilmədi: ' + err.message); }
+  }
+  async function unarchivePdf(e, p) {
+    e.stopPropagation();
+    try { await pdfsApi.unarchive(p.id); await load(); }
+    catch (err) { alert('Bərpa edilə bilmədi: ' + err.message); }
+  }
+  async function deleteArchivedPdf(e, p) {
+    e.stopPropagation();
+    if (!confirm(`"${p.title}" sənədini tamamilə silmək istəyirsiniz? Geri alına bilməz.`)) return;
+    try {
+      await pdfsApi.remove(p.id);
+      setArchived(prev => prev.filter(x => x.id !== p.id));
     } catch (err) { alert('Silinə bilmədi: ' + err.message); }
   }
 
@@ -259,7 +296,7 @@ export default function PdfList({ onBack, onLogout }) {
 
         <div className="search-wrap">
           <span className="search-icon"><Search size={18} /></span>
-          <input type="text" placeholder="Ad ilə axtar"
+          <input type="text" placeholder="Ad və ya nömrə ilə axtar"
             value={query} onChange={e => setQuery(e.target.value)} />
         </div>
 
@@ -267,12 +304,20 @@ export default function PdfList({ onBack, onLogout }) {
           {loading && <div className="empty-state"><Loader2 size={20} className="spin" />Yüklənir...</div>}
           {error && !loading && <div className="empty-state error">{error}</div>}
           {noResults && <div className="empty-state">Heç bir qrup yoxdur</div>}
+      {isAdmin && !loading && (
+            <button className="process-item create-btn" onClick={() => setGmodal({ type: 'create' })}>
+              <div className="num"><FolderPlus size={20} /></div>
+              <div className="label">Yeni qrup yarat</div>
+            </button>
+          )}
 
           {!loading && !error && groups.map((g, gi) => {
             const fullItems = pdfs.filter(p => Number(p.groupId) === Number(g.id));
             const items = fullItems.filter(matches);
             const total = fullItems.length;
             if (q && items.length === 0) return null;
+            // non-admins never see empty folders
+            if (!isAdmin && total === 0) return null;
             const isOpen = q ? true : !!expanded[g.id];
             const dndOn = isAdmin && !q;
             const folderNo = gi + 1;
@@ -354,23 +399,43 @@ export default function PdfList({ onBack, onLogout }) {
                           </div>
 
                           <div className="pdf-actions">
-                            <button className="pdf-action-btn" onClick={() => viewPdf(p)} disabled={busy === p.id} title="Bax">
+                            <button className="action-btn" onClick={() => viewPdf(p)} disabled={busy === p.id} title="Bax">
                               {busy === p.id ? <Loader2 size={15} className="spin" /> : <Eye size={15} />}
                               <span>Bax</span>
                             </button>
-                            <button className="pdf-action-btn" onClick={() => downloadPdf(p)} disabled={busy === p.id} title="Yüklə">
+                            <button className="action-btn" onClick={() => downloadPdf(p)} disabled={busy === p.id} title="Yüklə">
                               <DownloadIcon size={15} /><span>Yüklə</span>
                             </button>
                             {isAdmin && (
                               <>
-                                <button className="pdf-action-btn pdf-action-btn-icon nospace"
-                                  onClick={(e) => { e.stopPropagation(); setModal({ mode: 'edit', pdf: p }); }} title="Redaktə et">
-                                  <Edit3 size={15} />
-                                </button>
-                                <button className="pdf-action-btn pdf-action-btn-icon pdf-action-btn-danger"
-                                  onClick={(e) => removePdf(e, p)} title="Sil">
-                                  <Trash2 size={15} />
-                                </button>
+                                {pendingArchive === p.id ? (
+                                  <div className="archive-confirm">
+                                    <span className="archive-confirm-q"> </span>
+                                    <button className="action-btn confirm-yes" title="Təsdiq et"
+                                      onClick={(e) => confirmArchive(e, p)}>
+                                      <Archive size={15} /><span>Təsdiq</span>
+                                    </button>
+                                    <button className="action-btn" title="Ləğv et"
+                                      onClick={cancelArchive}>
+                                      <span>Ləğv</span>
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <button className="action-btn action-btn-icon nospace"
+                                      onClick={(e) => { e.stopPropagation(); setModal({ mode: 'edit', pdf: p }); }} title="Redaktə et">
+                                      <Edit3 size={15} />
+                                    </button>
+                                    <button className="action-btn action-btn-icon nospace"
+                                      onClick={(e) => requestArchive(e, p)} title="Arxivə köçür">
+                                      <Archive size={15} />
+                                    </button>
+                                    <button className="action-btn action-btn-icon action-btn-danger"
+                                      onClick={(e) => removePdf(e, p)} title="Sil">
+                                      <Trash2 size={15} />
+                                    </button>
+                                  </>
+                                )}
                               </>
                             )}
                           </div>
@@ -383,12 +448,59 @@ export default function PdfList({ onBack, onLogout }) {
             );
           })}
 
-          {isAdmin && !loading && (
-            <button className="process-item create-btn" onClick={() => setGmodal({ type: 'create' })}>
-              <div className="num"><FolderPlus size={20} /></div>
-              <div className="label">Yeni qrup yarat</div>
-            </button>
-          )}
+    
+
+          {isAdmin && !loading && !error && archived.length > 0 && (() => {
+            const items = archived.filter(matches);
+            if (q && items.length === 0) return null;
+            const isOpen = q ? true : archiveOpen;
+            return (
+              <div className={`group-card archive-card ${isOpen ? 'open' : ''}`}>
+                <div className="group-head" onClick={() => setArchiveOpen(v => !v)}>
+                  <span className="group-chevron">
+                    {isOpen ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
+                  </span>
+                  <span className="group-folder"><Archive size={17} /></span>
+                  <span className="group-name">Arxiv</span>
+                  <span className="group-count">{archived.length}</span>
+                </div>
+                {isOpen && (
+                  <div className="group-body">
+                    {items.map((p) => (
+                      <div key={p.id} className="process-item pdf-item archived-row">
+                        <div className="num"><Archive size={14} /></div>
+                        <div className="label">
+                          <span className="row-title">
+                            {p.title}
+                            {p.size ? <span className="pdf-size">{fmtSize(p.size)}</span> : null}
+                          </span>
+                          {p.subtitle ? <span className="row-subtitle">{p.subtitle}</span> : null}
+                        </div>
+                        <div className="pdf-actions">
+                          <button className="action-btn" onClick={() => viewPdf(p)} disabled={busy === p.id} title="Bax">
+                            {busy === p.id ? <Loader2 size={15} className="spin" /> : <Eye size={15} />}
+                            <span>Bax</span>
+                          </button>
+                          {isAdmin && (
+                            <>
+                              <button className="action-btn action-btn-icon nospace"
+                                onClick={(e) => unarchivePdf(e, p)} title="Arxivdən çıxar">
+                                <ArchiveRestore size={15} />
+                              </button>
+                              <button className="action-btn action-btn-icon action-btn-danger"
+                                onClick={(e) => deleteArchivedPdf(e, p)} title="Tamamilə sil">
+                                <Trash2 size={15} />
+                              </button>
+                            </>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })()}
         </div>
       </div>
 

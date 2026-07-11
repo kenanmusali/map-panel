@@ -1,9 +1,9 @@
 import { Router } from 'express';
 import { getFile, putFile } from '../services/github.js';
+import { tenantBase, tenantOf } from '../services/tenancy.js';
 
 const router = Router();
-const dataPath = () => (process.env.DATA_PATH || 'data').replace(/^\/|\/$/g, '');
-const settingsPath = () => `${dataPath()}/settings.json`;
+const settingsPath = (base) => `${base}/settings.json`;
 
 const DEFAULTS = {
   org_title: 'ABŞERON LOGİSTİKA MƏRKƏZİ',
@@ -16,33 +16,34 @@ const DEFAULTS = {
 };
 
 function requireAdmin(req, res, next) {
-  if (req.user?.role !== 'admin') return res.status(403).json({ error: 'Admin only' });
+  if (req.user?.role !== 'admin' && req.user?.role !== 'superadmin') return res.status(403).json({ error: 'Admin only' });
   next();
 }
 
-async function readSettings() {
-  const file = await getFile(settingsPath());
+async function readSettings(base) {
+  const file = await getFile(settingsPath(base));
   return { ...DEFAULTS, ...(file?.content || {}) };
 }
 
-// GET /api/settings — anyone logged in
-router.get('/', async (_req, res, next) => {
+// GET /api/settings — anyone logged in (scoped to their department)
+router.get('/', async (req, res, next) => {
   try {
-    res.json(await readSettings());
+    res.json(await readSettings(tenantBase(tenantOf(req))));
   } catch (e) { next(e); }
 });
 
 // PUT /api/settings — admin only; merges provided keys
 router.put('/', requireAdmin, async (req, res, next) => {
   try {
-    const current = await readSettings();
+    const base = tenantBase(tenantOf(req));
+    const current = await readSettings(base);
     const incoming = req.body || {};
-    const next = { ...current };
+    const nextSettings = { ...current };
     for (const k of Object.keys(DEFAULTS)) {
-      if (typeof incoming[k] === 'string') next[k] = incoming[k];
+      if (typeof incoming[k] === 'string') nextSettings[k] = incoming[k];
     }
-    await putFile(settingsPath(), next, { message: 'Update settings' });
-    res.json(next);
+    await putFile(settingsPath(base), nextSettings, { message: 'Update settings' });
+    res.json(nextSettings);
   } catch (e) { next(e); }
 });
 

@@ -6,14 +6,29 @@
 //     stroke         — white background, SOLID border, dark text
 //     dashed (Kəsik) — white background, DASHED border, dark text
 
-export const SHAPES = ['pill', 'rect', 'diamond', 'parallelogram'];
+export const SHAPES = [
+  'pill', 'rect', 'diamond', 'parallelogram',
+  'subprocess', 'manualinput', 'document', 'preparation', 'delay', 'trapezoid'
+];
 export const STYLES = ['solid', 'stroke', 'dashed'];
+
+// Shapes whose body is an SVG polygon/path overlay (ShapeBg in
+// DiagramCanvas.jsx) instead of a plain CSS-box (border-radius etc).
+// diamond/parallelogram were the original two; preparation, manualinput,
+// document and trapezoid reuse the same overlay mechanism.
+export const SVG_SHAPES = ['diamond', 'parallelogram', 'preparation', 'manualinput', 'document', 'trapezoid'];
 
 export const SHAPE_LABEL = {
   pill: 'Pill',
   rect: 'Rectangle',
   diamond: 'Romb',
   parallelogram: 'Parallel',
+  subprocess: 'Alt-proses',
+  manualinput: 'Əl daxiletmə',
+  document: 'Sənəd',
+  preparation: 'Hazırlıq',
+  delay: 'Gecikmə',
+  trapezoid: 'Trapesiya',
 };
 
 export const STYLE_LABEL = {
@@ -46,6 +61,12 @@ export function nodeDefaults(shape) {
     case 'rect': return { w: 200, h: 70 };
     case 'diamond': return { w: 150, h: 150 };
     case 'parallelogram': return { w: 210, h: 70 };
+    case 'subprocess': return { w: 210, h: 70 };
+    case 'manualinput': return { w: 210, h: 75 };
+    case 'document': return { w: 200, h: 85 };
+    case 'preparation': return { w: 190, h: 110 };
+    case 'delay': return { w: 190, h: 60 };
+    case 'trapezoid': return { w: 210, h: 80 };
     default: return { w: 200, h: 70 };
   }
 }

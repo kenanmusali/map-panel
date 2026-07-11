@@ -85,6 +85,30 @@ async function localDelete(p) {
   }
 }
 
+// List JSON files in a directory (used by the real-time fallback store so each
+// presence/lock entry can be its own file — no shared-file write conflicts).
+export async function listDir(p) {
+  if (hasGithubConfig() && isVercel) {
+    try {
+      const { GITHUB_BRANCH } = cfg();
+      const res = await fetch(`${urlFor(p)}?ref=${encodeURIComponent(GITHUB_BRANCH)}`, { headers: headers() });
+      if (res.ok) {
+        const arr = await res.json();
+        if (Array.isArray(arr)) return arr.filter(x => x.type === 'file').map(x => x.name);
+      }
+    } catch { /* fall through to local */ }
+    return [];
+  }
+  const names = new Set();
+  for (const dir of [LOCAL_DATA_DIR, DEFAULT_DATA_DIR]) {
+    try {
+      const entries = await fs.readdir(path.join(dir, p));
+      entries.forEach(n => names.add(n));
+    } catch { /* dir may not exist */ }
+  }
+  return [...names];
+}
+
 export async function getFile(p) {
   // Locally, the project `data/` folder is the source of truth.
   if (!isVercel) {
@@ -116,44 +140,54 @@ export async function getFile(p) {
 }
 
 export async function putFile(p, contentObject, { message, sha } = {}) {
-  // Always keep the local `data/` folder in sync
+  // Always keep the local `data/` folder in sync (best-effort; on Vercel this is
+  // /tmp and is wiped between invocations, so GitHub is the real source of truth).
   await localPut(p, contentObject).catch(() => {});
 
   if (!hasGithubConfig()) return { ok: true };
 
-  try {
-    const { GITHUB_BRANCH } = cfg();
+  const { GITHUB_BRANCH } = cfg();
+  const content = Buffer.from(
+    JSON.stringify(contentObject, null, 2) + '\n',
+    'utf8'
+  ).toString('base64');
 
-    if (sha === undefined) {
-      sha = await ghGetBinarySha(p).catch(() => null);
+  // Retry loop: the #1 cause of a "save that didn't stick" is a stale SHA
+  // (GitHub 409/422). We refetch the current SHA and try again a few times.
+  let lastErr = null;
+  for (let attempt = 0; attempt < 4; attempt++) {
+    try {
+      // First attempt may use the caller-supplied SHA; every retry refetches.
+      let useSha = (attempt === 0) ? sha : undefined;
+      if (useSha === undefined) useSha = await ghGetBinarySha(p).catch(() => null);
+
+      const body = { message: message || `Update ${p}`, content, branch: GITHUB_BRANCH };
+      if (useSha && useSha !== 'local') body.sha = useSha;
+
+      const res = await fetch(urlFor(p), {
+        method: 'PUT',
+        headers: headers(),
+        body: JSON.stringify(body)
+      });
+
+      if (res.ok) return res.json();
+
+      const txt = await res.text();
+      // 409 (conflict) / 422 (sha mismatch) are retryable — loop and refetch SHA.
+      if (res.status === 409 || res.status === 422) { lastErr = new Error(txt); continue; }
+      // Anything else (401 bad token, 404 wrong repo/branch, 403 rate-limit…) is fatal.
+      throw new Error(`GitHub ${res.status}: ${txt}`);
+    } catch (e) {
+      lastErr = e;
     }
-
-    const content = Buffer.from(
-      JSON.stringify(contentObject, null, 2) + '\n',
-      'utf8'
-    ).toString('base64');
-
-    const body = {
-      message: message || `Update ${p}`,
-      content,
-      branch: GITHUB_BRANCH
-    };
-
-    if (sha && sha !== 'local') body.sha = sha;
-
-    const res = await fetch(urlFor(p), {
-      method: 'PUT',
-      headers: headers(),
-      body: JSON.stringify(body)
-    });
-
-    if (!res.ok) throw new Error(await res.text());
-
-    return res.json();
-  } catch (e) {
-    console.error('[putFile] GitHub sync failed:', e.message);
-    return { ok: true, githubSynced: false };
   }
+
+  // We could NOT persist to GitHub. Do NOT pretend it worked — surface a real
+  // error so the caller (and the UI) knows the change was not saved.
+  console.error('[putFile] GitHub sync failed:', lastErr?.message);
+  const err = new Error(`GitHub-a yazmaq mümkün olmadı: ${lastErr?.message || 'naməlum xəta'}`);
+  err.status = 502;
+  throw err;
 }
 
 export async function deleteFile(p, { message } = {}) {

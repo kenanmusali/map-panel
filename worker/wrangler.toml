@@ -1,0 +1,12 @@
+name = "map-panel-api"
+main = "src/index.js"
+compatibility_date = "2024-11-01"
+
+compatibility_flags = ["nodejs_compat"]
+
+[vars]
+DATA_PATH = "data"
+GITHUB_OWNER = "kenanmusali"
+GITHUB_REPO = "Map-Panel"
+GITHUB_BRANCH = "main"
+CORS_ORIGIN = "*"

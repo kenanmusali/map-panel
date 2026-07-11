@@ -41,9 +41,9 @@
       "id": 1,
       "type": "pill",
       "style": "solid",
-      "x": 100,
-      "y": 70,
-      "laneId": "lane-1782971717064",
+      "x": 340,
+      "y": 230,
+      "laneId": "lane-1782971723668",
       "w": 200,
       "h": 50,
       "text": "Yeni başlanğıc/son",
@@ -60,9 +60,9 @@
       "id": 2,
       "type": "rect",
       "style": "solid",
-      "x": 100,
-      "y": 220,
-      "laneId": "lane-1782971723668",
+      "x": 170,
+      "y": 60,
+      "laneId": "lane-1782971717064",
       "w": 200,
       "h": 70,
       "text": "Yeni addım",
@@ -76,5 +76,12 @@
       }
     }
   ],
-  "edges": []
+  "edges": [
+    {
+      "from": 1,
+      "to": 2,
+      "s": "bottom",
+      "e": "bottom"
+    }
+  ]
 }

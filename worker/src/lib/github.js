@@ -57,8 +57,11 @@ export async function getFile(p) {
     return memJson.has(p) ? { content: memJson.get(p), sha: 'mem' } : null;
   }
   try {
-    const { GITHUB_BRANCH } = cfg();
-    const res = await `${urlFor(p)}?ref=${encodeURIComponent(GITHUB_BRANCH)}`, { headers: headers() });
+   const { GITHUB_BRANCH } = cfg();
+const res = await fetch(
+  `${urlFor(p)}?ref=${encodeURIComponent(GITHUB_BRANCH)}`,
+  { headers: headers() }
+);
     if (res.status === 404) return memJson.has(p) ? { content: memJson.get(p), sha: 'mem' } : null;
     if (!res.ok) throw new Error(`GitHub ${res.status}: ${await res.text()}`);
     const data = await res.json();

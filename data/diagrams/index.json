@@ -5,10 +5,6 @@
       "name": "Tırpark və Minik avtomobillərinin dayanacağı şöbəsi"
     },
     {
-      "id": 2,
-      "name": "Test Workflows (EN)"
-    },
-    {
       "id": 1,
       "name": "Ümumi"
     }
@@ -25,18 +21,6 @@
       "title": "Dəmir yolu ilə idxal olunan vaqon yüklərinin yük avtomobilinə boşaldılması və müştəriyə təhvil verilməsi iş axını",
       "subtitle": "ALM-X1-C1",
       "groupId": 1
-    },
-    {
-      "id": 101,
-      "title": "Customer Support Ticket Resolution",
-      "subtitle": "TEST-EN-SHORT-12",
-      "groupId": 2
-    },
-    {
-      "id": 102,
-      "title": "E-commerce Order Fulfillment",
-      "subtitle": "TEST-EN-LONG-33",
-      "groupId": 2
     },
     {
       "id": 106,

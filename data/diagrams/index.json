@@ -3,25 +3,9 @@
     {
       "id": 6,
       "name": "Tırpark və Minik avtomobillərinin dayanacağı şöbəsi"
-    },
-    {
-      "id": 1,
-      "name": "Ümumi"
     }
   ],
   "processes": [
-    {
-      "id": 1,
-      "title": "Vaqonların Mərkəzə qəbulu prosesi",
-      "subtitle": "ALM-X1-C1",
-      "groupId": 1
-    },
-    {
-      "id": 3,
-      "title": "Dəmir yolu ilə idxal olunan vaqon yüklərinin yük avtomobilinə boşaldılması və müştəriyə təhvil verilməsi iş axını",
-      "subtitle": "ALM-X1-C1",
-      "groupId": 1
-    },
     {
       "id": 106,
       "title": "Terminal prosesləri ilə əlaqədar boş yük avtomobillərinin Tırparka girişi və Mərkəzdən çıxışı iş axışı",

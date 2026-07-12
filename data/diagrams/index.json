@@ -45,10 +45,6 @@
       "name": "Layihələrin idarə olunması departamenti"
     },
     {
-      "id": 6,
-      "name": "Tırpark və Minik avtomobillərinin dayanacağı şöbəsi"
-    },
-    {
       "id": 18,
       "name": "Marketinq və Kommunikasiya departamenti"
     },
@@ -67,6 +63,10 @@
     {
       "id": 22,
       "name": "Sahə əməliyyatları ofisi"
+    },
+    {
+      "id": 6,
+      "name": "Tırpark və Minik avtomobillərinin dayanacağı şöbəsi"
     },
     {
       "id": 23,

@@ -59,6 +59,10 @@
     {
       "id": 20,
       "name": "Manevra və planlama ofisi"
+    },
+    {
+      "id": 21,
+      "name": "Risklərə nəzarət və monitorinq şöbəsi"
     }
   ],
   "processes": [

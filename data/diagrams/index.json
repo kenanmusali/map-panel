@@ -15,10 +15,6 @@
     {
       "id": 3,
       "name": "Salalm"
-    },
-    {
-      "id": 5,
-      "name": "HR - Human Resources"
     }
   ],
   "processes": [
@@ -45,12 +41,6 @@
       "title": "E-commerce Order Fulfillment",
       "subtitle": "TEST-EN-LONG-33",
       "groupId": 2
-    },
-    {
-      "id": 105,
-      "title": "HR İşə Qəbul və Adaptasiya Prosesi - Tam İş Axını",
-      "subtitle": "HR-DEPT-V1-030726",
-      "groupId": 5
     },
     {
       "id": 106,

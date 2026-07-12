@@ -23,7 +23,7 @@
     {
       "username": "namig_admin",
       "displayName": "Namig Naghiyev",
-      "passwordHash": "$2a$08$lus/YAuRcPA6veokFP.PvuYq905wT0KeVaBruExjVZoQ8vVsm9Y.q",
+      "passwordHash": "pbkdf2$100000$MwEe75Duo0SjHXgghnsOqw==$1vJyckPCvNcZDeShZO7RmXbz5Ekwp0/wTfqqoSv8R8A=",
       "role": "admin",
       "tenantId": "main",
       "disabled": false,

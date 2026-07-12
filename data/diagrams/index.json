@@ -71,6 +71,10 @@
     {
       "id": 23,
       "name": "Təchizat şöbəsi"
+    },
+    {
+      "id": 24,
+      "name": "Təhlükəsizlik şöbəsi"
     }
   ],
   "processes": [

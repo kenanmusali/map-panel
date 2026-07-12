@@ -75,6 +75,10 @@
     {
       "id": 24,
       "name": "Təhlükəsizlik şöbəsi"
+    },
+    {
+      "id": 25,
+      "name": "Təmir və texnikaya nəzarət şöbəsi"
     }
   ],
   "processes": [

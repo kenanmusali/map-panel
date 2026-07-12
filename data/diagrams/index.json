@@ -15,6 +15,10 @@
     {
       "id": 9,
       "name": "Beynəlxalq daşımalar departamenti"
+    },
+    {
+      "id": 10,
+      "name": "Daxili audit departamenti"
     }
   ],
   "processes": [

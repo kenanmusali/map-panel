@@ -1,5 +1,10 @@
 {
-  "groups": [],
+  "groups": [
+    {
+      "id": 1,
+      "name": "Anbar logistikası şöbəsi"
+    }
+  ],
   "pdfs": [],
   "files": []
 }

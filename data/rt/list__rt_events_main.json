@@ -1,6 +1,18 @@
 {
   "items": [
     {
+      "id": "mrhrbnzf-0",
+      "ts": 1783858552107,
+      "tenantId": "main",
+      "type": "user",
+      "action": "edit.start",
+      "actor": "namig_admin",
+      "role": "admin",
+      "target": "105",
+      "targetName": "HR İşə Qəbul və Adaptasiya Prosesi - Tam İş Axını",
+      "detail": null
+    },
+    {
       "id": "mrgyrjs0-1",
       "ts": 1783810584288,
       "tenantId": "main",

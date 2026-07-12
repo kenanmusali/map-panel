@@ -1,8 +1,20 @@
 {
   "items": [
     {
-      "id": "mrhs94kd-0",
-      "ts": 1783860113245,
+      "id": "mrhs96g8-3",
+      "ts": 1783860115688,
+      "tenantId": "main",
+      "type": "user",
+      "action": "edit.start",
+      "actor": "namig_admin",
+      "role": "admin",
+      "target": "106",
+      "targetName": "Terminal prosesləri ilə əlaqədar boş yük avtomobillərinin Tırparka girişi və Mərkəzdən çıxışı iş axışı",
+      "detail": null
+    },
+    {
+      "id": "mrhs95f0-2",
+      "ts": 1783860114348,
       "tenantId": "main",
       "type": "user",
       "action": "edit.start",

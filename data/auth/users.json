@@ -3,7 +3,7 @@
     {
       "username": "superadmin",
       "displayName": "Super Admin",
-      "passwordHash": "$2a$08$vhIPGYdcArxyRrmHhWIGA.fJrN0KmrsHZxUWPi0WOh9dkbE5NmH3a",
+      "passwordHash": "pbkdf2$100000$Vm99B31QfuWXpYj2Xhbakg==$BxUUDuh3Ado6oNq8DsO50IFa7Qyl6KjIBVh967Ydtbw=",
       "role": "superadmin",
       "tenantId": null,
       "disabled": false,

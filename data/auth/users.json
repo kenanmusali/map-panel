@@ -33,7 +33,7 @@
     {
       "username": "user",
       "displayName": "User",
-      "passwordHash": "$2a$08$uO3v5hI0DEKRiwh4A2I13.8IRja2hArGLPqFJEBSqqS8owi7Uh0Ne",
+      "passwordHash": "pbkdf2$100000$FRxFr9xnB20+HAtQg+0XGg==$ITVxMbxMEygM4Q1pZoGYWKN6z6dHFfjwBWKtXFuV6fY=",
       "role": "viewer",
       "tenantId": "main",
       "disabled": false,

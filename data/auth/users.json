@@ -3,42 +3,32 @@
     {
       "username": "superadmin",
       "displayName": "Super Admin",
-      "passwordHash": "pbkdf2$100000$Vm99B31QfuWXpYj2Xhbakg==$BxUUDuh3Ado6oNq8DsO50IFa7Qyl6KjIBVh967Ydtbw=",
+      "passwordHash": "pbkdf2$100000$7N+YfKamfrzs+OjsaKM4FA==$3gVJZa7Lb89oIA0jHyfs/aZ3iMG6h80xawbveZ5kJKo=",
       "role": "superadmin",
       "tenantId": null,
       "disabled": false,
-      "createdAt": "2026-07-08T09:35:47.241Z",
+      "createdAt": "2026-07-13T07:19:27.946Z",
       "createdBy": "system"
     },
     {
-      "username": "kenan_admin",
-      "displayName": "Kenan Musali",
-      "passwordHash": "$2a$08$Zz./5gEgA4djy74Y/ECY0OO7P30ScOYTDhwG.SQQccaWXTFh.7ZYS",
+      "username": "admin",
+      "displayName": "Admin",
+      "passwordHash": "pbkdf2$100000$1gM+tJKV7RFJvDT7E+tZAw==$JUq9VkpbxabQyMJ5hszRA73rMwGLZssgZd94j9Miofc=",
       "role": "admin",
       "tenantId": "main",
       "disabled": false,
-      "createdAt": "2026-07-08T09:37:54.523Z",
-      "createdBy": "superadmin"
-    },
-    {
-      "username": "namig_admin",
-      "displayName": "Namig Naghiyev",
-      "passwordHash": "pbkdf2$100000$MwEe75Duo0SjHXgghnsOqw==$1vJyckPCvNcZDeShZO7RmXbz5Ekwp0/wTfqqoSv8R8A=",
-      "role": "admin",
-      "tenantId": "main",
-      "disabled": false,
-      "createdAt": "2026-07-08T09:43:42.634Z",
-      "createdBy": "superadmin"
+      "createdAt": "2026-07-13T07:19:27.946Z",
+      "createdBy": "system"
     },
     {
       "username": "user",
-      "displayName": "User",
-      "passwordHash": "pbkdf2$100000$eF94wAhcGsLSn/ErjhreXQ==$5g7jTr3vaVekHFvT0Ck13EQPw7pdYcrOz9UtEWf0vkI=",
+      "displayName": "İstifadəçi",
+      "passwordHash": "pbkdf2$100000$asIXq7V5FEAEFQX4mBagGA==$Id4+4rUW8ISLkIZx7TnH/GcwPSGyVPl6NbRmR+Rwz+I=",
       "role": "viewer",
       "tenantId": "main",
       "disabled": false,
-      "createdAt": "2026-07-08T09:51:15.645Z",
-      "createdBy": "superadmin"
+      "createdAt": "2026-07-13T07:19:27.946Z",
+      "createdBy": "system"
     }
   ]
 }
